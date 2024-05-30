@@ -138,6 +138,12 @@ func MustMarshal(v interface{}) []byte {
 // will be valid. It's probably more consistent to use Decoder.Decode if you want to rely on this
 // behaviour (inspired by Rust's serde here).
 func Unmarshal(data []byte, v interface{}) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Sprint("illegal keys in bencoded value", r)
+		}
+	}()
+	
 	buf := bytes.NewReader(data)
 	dec := Decoder{r: buf}
 	err = dec.Decode(v)
