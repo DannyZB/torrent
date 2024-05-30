@@ -64,12 +64,14 @@ require (
 	github.com/anacrolix/backtrace v0.0.0-20221205112523-22a61db8f82e // indirect
 	github.com/anacrolix/missinggo/perf v1.0.0 // indirect
 	github.com/anacrolix/mmsg v1.0.1 // indirect
-	github.com/anacrolix/stm v0.4.0 // indirect
-	github.com/benbjohnson/immutable v0.3.0 // indirect
+	github.com/anacrolix/stm v0.4.1-0.20221221005312-96d17df0e496 // indirect
+	github.com/anacrolix/torrent v1.47.1-0.20221102120345-c63f7e1bd720 // indirect
+	github.com/benbjohnson/immutable v0.4.1-0.20221220213129-8932b999621d // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.2.2 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
+	github.com/dannyzb/dht/v2 v2.0.0-20250507064540-e7c61881fc47 // indirect
 	github.com/go-llsqlite/crawshaw v0.5.2-0.20240425034140-f30eb7704568 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -160,3 +162,5 @@ retract (
 	// Indefinite outgoing requests on storage write errors. https://github.com/dannyzb/torrent/issues/889
 	[v1.29.0, v1.53.2]
 )
+
+replace github.com/anacrolix/torrent => github.com/dannyzb/torrent v0.0.0-20241228163132-01bdb041c723
