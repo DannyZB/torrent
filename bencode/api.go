@@ -2,6 +2,7 @@ package bencode
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -140,7 +141,7 @@ func MustMarshal(v interface{}) []byte {
 func Unmarshal(data []byte, v interface{}) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Sprint("illegal keys in bencoded value", r)
+			err = errors.New(fmt.Sprint("illegal keys in bencoded value", r))
 		}
 	}()
 	
