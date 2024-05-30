@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"github.com/anacrolix/torrent/segments"
+	"github.com/dannyzb/torrent/segments"
 )
 
 // Returns the minimum file lengths required for the given extent to exist on disk. Returns false if

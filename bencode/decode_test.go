@@ -237,7 +237,7 @@ func TestDecodeMaxStrLen(t *testing.T) {
 	}), 69)
 }
 
-// This is for the "github.com/anacrolix/torrent/metainfo".Info.Private field.
+// This is for the "github.com/dannyzb/torrent/metainfo".Info.Private field.
 func TestDecodeStringIntoBoolPtr(t *testing.T) {
 	var m struct {
 		Private *bool `bencode:"private,omitempty"`

@@ -8,7 +8,7 @@ import (
 	g "github.com/anacrolix/generics"
 	"github.com/anacrolix/log"
 
-	pp "github.com/anacrolix/torrent/peer_protocol"
+	pp "github.com/dannyzb/torrent/peer_protocol"
 )
 
 const (

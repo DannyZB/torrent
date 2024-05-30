@@ -15,10 +15,10 @@ import (
 	"github.com/anacrolix/sync"
 	"github.com/dustin/go-humanize"
 
-	"github.com/anacrolix/torrent"
-	"github.com/anacrolix/torrent/bencode"
-	"github.com/anacrolix/torrent/metainfo"
-	"github.com/anacrolix/torrent/storage"
+	"github.com/dannyzb/torrent"
+	"github.com/dannyzb/torrent/bencode"
+	"github.com/dannyzb/torrent/metainfo"
+	"github.com/dannyzb/torrent/storage"
 )
 
 func assertNil(x any) {

@@ -14,10 +14,10 @@ import (
 	"github.com/pion/webrtc/v4"
 	"golang.org/x/time/rate"
 
-	"github.com/anacrolix/torrent/iplist"
-	"github.com/anacrolix/torrent/mse"
-	"github.com/anacrolix/torrent/storage"
-	"github.com/anacrolix/torrent/version"
+	"github.com/dannyzb/torrent/iplist"
+	"github.com/dannyzb/torrent/mse"
+	"github.com/dannyzb/torrent/storage"
+	"github.com/dannyzb/torrent/version"
 )
 
 // Contains config elements that are exclusive to tracker handling. There may be other fields in

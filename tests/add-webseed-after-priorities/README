@@ -1,4 +1,4 @@
-This directory tests the fix for https://github.com/anacrolix/torrent/issues/964#issuecomment-2295308596. See the justfile too.
+This directory tests the fix for https://github.com/dannyzb/torrent/issues/964#issuecomment-2295308596. See the justfile too.
 
 The seeder should start fetching from HTTP, despite the webseed being added after Torrent.DownloadAll is called. It should still fetch even if the leecher doesn't connect (disable the AddPeers line).
 

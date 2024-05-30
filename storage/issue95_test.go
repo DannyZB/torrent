@@ -7,7 +7,7 @@ import (
 	"github.com/anacrolix/missinggo/v2/resource"
 	"github.com/go-quicktest/qt"
 
-	"github.com/anacrolix/torrent/metainfo"
+	"github.com/dannyzb/torrent/metainfo"
 )
 
 // Two different torrents opened from the same storage. Closing one should not

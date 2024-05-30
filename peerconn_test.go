@@ -16,9 +16,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/time/rate"
 
-	"github.com/anacrolix/torrent/metainfo"
-	pp "github.com/anacrolix/torrent/peer_protocol"
-	"github.com/anacrolix/torrent/storage"
+	"github.com/dannyzb/torrent/metainfo"
+	pp "github.com/dannyzb/torrent/peer_protocol"
+	"github.com/dannyzb/torrent/storage"
 )
 
 // Ensure that no race exists between sending a bitfield, and a subsequent

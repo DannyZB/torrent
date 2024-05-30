@@ -6,9 +6,9 @@ import (
 	"math/rand"
 	"strings"
 
-	"github.com/anacrolix/torrent/internal/testutil"
-	"github.com/anacrolix/torrent/metainfo"
-	"github.com/anacrolix/torrent/storage"
+	"github.com/dannyzb/torrent/internal/testutil"
+	"github.com/dannyzb/torrent/metainfo"
+	"github.com/dannyzb/torrent/storage"
 )
 
 type badStorage struct{}

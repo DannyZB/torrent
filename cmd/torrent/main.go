@@ -23,8 +23,8 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/sdk/trace"
 
-	"github.com/anacrolix/torrent/bencode"
-	"github.com/anacrolix/torrent/version"
+	"github.com/dannyzb/torrent/bencode"
+	"github.com/dannyzb/torrent/version"
 )
 
 func init() {

@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	pp "github.com/anacrolix/torrent/peer_protocol"
+	pp "github.com/dannyzb/torrent/peer_protocol"
 )
 
 var (

@@ -10,8 +10,8 @@ import (
 
 	"github.com/anacrolix/log"
 
-	"github.com/anacrolix/torrent/merkle"
-	"github.com/anacrolix/torrent/metainfo"
+	"github.com/dannyzb/torrent/merkle"
+	"github.com/dannyzb/torrent/metainfo"
 )
 
 type argError struct {

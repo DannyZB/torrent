@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/anacrolix/torrent/bencode"
-	infohash_v2 "github.com/anacrolix/torrent/types/infohash-v2"
+	"github.com/dannyzb/torrent/bencode"
+	infohash_v2 "github.com/dannyzb/torrent/types/infohash-v2"
 )
 
 // Also known as a torrent file.
@@ -74,7 +74,7 @@ func (mi *MetaInfo) Write(w io.Writer) error {
 
 // Set good default values in preparation for creating a new MetaInfo file.
 func (mi *MetaInfo) SetDefaults() {
-	mi.CreatedBy = "github.com/anacrolix/torrent"
+	mi.CreatedBy = "github.com/dannyzb/torrent"
 	mi.CreationDate = time.Now().Unix()
 }
 

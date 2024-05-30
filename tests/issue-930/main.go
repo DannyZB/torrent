@@ -6,9 +6,9 @@ import (
 
 	"github.com/anacrolix/envpprof"
 
-	"github.com/anacrolix/torrent"
-	"github.com/anacrolix/torrent/metainfo"
-	"github.com/anacrolix/torrent/storage"
+	"github.com/dannyzb/torrent"
+	"github.com/dannyzb/torrent/metainfo"
+	"github.com/dannyzb/torrent/storage"
 )
 
 var client *torrent.Client

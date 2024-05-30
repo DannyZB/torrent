@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/time/rate"
 
-	"github.com/anacrolix/torrent/internal/testutil"
-	"github.com/anacrolix/torrent/storage"
+	"github.com/dannyzb/torrent/internal/testutil"
+	"github.com/dannyzb/torrent/storage"
 )
 
 func TestDropTorrentWithMmapStorageWhileHashing(t *testing.T) {

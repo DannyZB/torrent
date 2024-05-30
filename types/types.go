@@ -5,7 +5,7 @@ package types
 import (
 	"fmt"
 
-	pp "github.com/anacrolix/torrent/peer_protocol"
+	pp "github.com/dannyzb/torrent/peer_protocol"
 )
 
 type PieceIndex = int

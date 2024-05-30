@@ -11,9 +11,9 @@ import (
 	"github.com/RoaringBitmap/roaring"
 	"github.com/anacrolix/log"
 
-	"github.com/anacrolix/torrent/metainfo"
-	pp "github.com/anacrolix/torrent/peer_protocol"
-	"github.com/anacrolix/torrent/webseed"
+	"github.com/dannyzb/torrent/metainfo"
+	pp "github.com/dannyzb/torrent/peer_protocol"
+	"github.com/dannyzb/torrent/webseed"
 )
 
 const (

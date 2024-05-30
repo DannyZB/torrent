@@ -8,9 +8,9 @@ import (
 	"github.com/anacrolix/sync"
 	qt "github.com/frankban/quicktest"
 
-	. "github.com/anacrolix/torrent"
-	"github.com/anacrolix/torrent/internal/testutil"
-	pp "github.com/anacrolix/torrent/peer_protocol"
+	. "github.com/dannyzb/torrent"
+	"github.com/dannyzb/torrent/internal/testutil"
+	pp "github.com/dannyzb/torrent/peer_protocol"
 )
 
 const (

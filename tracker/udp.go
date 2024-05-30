@@ -6,9 +6,9 @@ import (
 
 	"github.com/anacrolix/generics"
 
-	trHttp "github.com/anacrolix/torrent/tracker/http"
-	"github.com/anacrolix/torrent/tracker/udp"
-	"github.com/anacrolix/torrent/types/infohash"
+	trHttp "github.com/dannyzb/torrent/tracker/http"
+	"github.com/dannyzb/torrent/tracker/udp"
+	"github.com/dannyzb/torrent/types/infohash"
 )
 
 type udpClient struct {

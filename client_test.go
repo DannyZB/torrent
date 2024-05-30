@@ -23,11 +23,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/anacrolix/torrent/bencode"
-	"github.com/anacrolix/torrent/internal/testutil"
-	"github.com/anacrolix/torrent/iplist"
-	"github.com/anacrolix/torrent/metainfo"
-	"github.com/anacrolix/torrent/storage"
+	"github.com/dannyzb/torrent/bencode"
+	"github.com/dannyzb/torrent/internal/testutil"
+	"github.com/dannyzb/torrent/iplist"
+	"github.com/dannyzb/torrent/metainfo"
+	"github.com/dannyzb/torrent/storage"
 )
 
 func TestClientDefault(t *testing.T) {
@@ -714,7 +714,7 @@ func makeMagnet(t *testing.T, cl *Client, dir, name string) string {
 	return magnet
 }
 
-// https://github.com/anacrolix/torrent/issues/114
+// https://github.com/dannyzb/torrent/issues/114
 func TestMultipleTorrentsWithEncryption(t *testing.T) {
 	testSeederLeecherPair(
 		t,
@@ -901,7 +901,7 @@ func TestBadPeerIpPort(t *testing.T) {
 	}
 }
 
-// https://github.com/anacrolix/torrent/issues/837
+// https://github.com/dannyzb/torrent/issues/837
 func TestClientConfigSetHandlerNotIgnored(t *testing.T) {
 	cfg := TestingConfig(t)
 	cfg.Logger.SetHandlers(log.DiscardHandler)

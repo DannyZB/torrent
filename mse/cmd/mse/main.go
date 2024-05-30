@@ -11,7 +11,7 @@ import (
 
 	"github.com/alexflint/go-arg"
 
-	"github.com/anacrolix/torrent/mse"
+	"github.com/dannyzb/torrent/mse"
 )
 
 func main() {

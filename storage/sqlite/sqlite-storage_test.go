@@ -14,9 +14,9 @@ import (
 	"github.com/dustin/go-humanize"
 	qt "github.com/frankban/quicktest"
 
-	"github.com/anacrolix/torrent/storage"
-	test_storage "github.com/anacrolix/torrent/storage/test"
-	"github.com/anacrolix/torrent/test"
+	"github.com/dannyzb/torrent/storage"
+	test_storage "github.com/dannyzb/torrent/storage/test"
+	"github.com/dannyzb/torrent/test"
 )
 
 func TestLeecherStorage(t *testing.T) {

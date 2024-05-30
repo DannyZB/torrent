@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/anacrolix/torrent/bencode"
-	"github.com/anacrolix/torrent/tracker/udp"
+	"github.com/dannyzb/torrent/bencode"
+	"github.com/dannyzb/torrent/tracker/udp"
 )
 
 func TestUnmarshalHTTPResponsePeerDicts(t *testing.T) {
@@ -54,7 +54,7 @@ func TestUnmarshalHttpResponsePeers6NotCompact(t *testing.T) {
 }
 
 // Checks that infohash bytes that correspond to spaces are escaped with %20 instead of +. See
-// https://github.com/anacrolix/torrent/issues/534
+// https://github.com/dannyzb/torrent/issues/534
 func TestSetAnnounceInfohashParamWithSpaces(t *testing.T) {
 	someUrl := &url.URL{}
 	ihBytes := [20]uint8{

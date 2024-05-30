@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"github.com/anacrolix/torrent/metainfo"
+	"github.com/dannyzb/torrent/metainfo"
 )
 
 func NewFileWithCompletion(baseDir string, completion PieceCompletion) ClientImplCloser {

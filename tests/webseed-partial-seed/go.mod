@@ -1,9 +1,10 @@
-module github.com/anacrolix/torrent/tests/webseed-partial-seed
+
+module github.com/dannyzb/torrent/tests/webseed-partial-seed
 
 go 1.23
 
 require (
-	github.com/anacrolix/torrent v1.56.1
+	github.com/dannyzb/torrent v1.56.1
 	github.com/frankban/quicktest v1.14.6
 )
 

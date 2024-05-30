@@ -15,8 +15,8 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/anacrolix/torrent/tracker"
-	"github.com/anacrolix/torrent/tracker/udp"
+	"github.com/dannyzb/torrent/tracker"
+	"github.com/dannyzb/torrent/tracker/udp"
 )
 
 // This is reserved for stuff like filtering by IP version, avoiding an announcer's IP or key,

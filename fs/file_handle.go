@@ -8,7 +8,7 @@ import (
 	"github.com/anacrolix/fuse/fs"
 	"github.com/anacrolix/missinggo/v2"
 
-	"github.com/anacrolix/torrent"
+	"github.com/dannyzb/torrent"
 )
 
 type fileHandle struct {

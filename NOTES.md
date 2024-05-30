@@ -28,7 +28,7 @@ The DHT is a bit different: you can't be an active node if you are a badnat, but
 
 - https://blog.ipfs.tech/2022-01-20-libp2p-hole-punching/
 - https://www.bittorrent.org/beps/bep_0055.html
-- https://github.com/anacrolix/torrent/issues/685
+- https://github.com/dannyzb/torrent/issues/685
 - https://stackoverflow.com/questions/38786438/libutp-%C2%B5tp-and-nat-traversal-udp-hole-punching
 
 ### BitTorrent v2
