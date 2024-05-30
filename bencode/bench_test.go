@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/dannyzb/dht/v2/krpc"
 
 	"github.com/dannyzb/torrent/bencode"
 )

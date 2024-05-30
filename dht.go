@@ -4,9 +4,9 @@ import (
 	"io"
 	"net"
 
-	"github.com/anacrolix/dht/v2"
-	"github.com/anacrolix/dht/v2/krpc"
-	peer_store "github.com/anacrolix/dht/v2/peer-store"
+	"github.com/dannyzb/dht/v2"
+	"github.com/dannyzb/dht/v2/krpc"
+	peer_store "github.com/dannyzb/dht/v2/peer-store"
 )
 
 // DHT server interface for use by a Torrent or Client. It's reasonable for this to make assumptions

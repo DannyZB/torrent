@@ -14,7 +14,7 @@ import (
 	"testing/iotest"
 	"time"
 
-	"github.com/anacrolix/dht/v2"
+	"github.com/dannyzb/dht/v2"
 	"github.com/anacrolix/log"
 	"github.com/anacrolix/missinggo/v2"
 	"github.com/anacrolix/missinggo/v2/filecache"

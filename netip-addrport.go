@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/netip"
 
-	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/dannyzb/dht/v2/krpc"
 )
 
 type addrPorter interface {

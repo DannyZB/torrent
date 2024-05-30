@@ -4,7 +4,7 @@ import (
 	"encoding"
 	"fmt"
 
-	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/dannyzb/dht/v2/krpc"
 )
 
 // Marshalled as binary by the UDP client, so be careful making changes.

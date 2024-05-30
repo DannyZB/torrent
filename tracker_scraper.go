@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/dannyzb/dht/v2/krpc"
 	"github.com/anacrolix/log"
 
 	"github.com/dannyzb/torrent/tracker"

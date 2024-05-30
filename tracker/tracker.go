@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/dannyzb/dht/v2/krpc"
 	"github.com/anacrolix/log"
 
 	trHttp "github.com/dannyzb/torrent/tracker/http"

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/dannyzb/dht/v2/krpc"
 )
 
 // Client interacts with UDP trackers via its Writer and Dispatcher. It has no knowledge of
