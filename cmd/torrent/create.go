@@ -6,8 +6,8 @@ import (
 	"github.com/anacrolix/bargle"
 	"github.com/anacrolix/tagflag"
 
-	"github.com/anacrolix/torrent/bencode"
-	"github.com/anacrolix/torrent/metainfo"
+	"github.com/dannyzb/torrent/bencode"
+	"github.com/dannyzb/torrent/metainfo"
 )
 
 var builtinAnnounceList = [][]string{

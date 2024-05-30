@@ -8,9 +8,9 @@ import (
 
 	"github.com/anacrolix/missinggo/v2"
 
-	"github.com/anacrolix/torrent/common"
-	"github.com/anacrolix/torrent/metainfo"
-	"github.com/anacrolix/torrent/segments"
+	"github.com/dannyzb/torrent/common"
+	"github.com/dannyzb/torrent/metainfo"
+	"github.com/dannyzb/torrent/segments"
 )
 
 // File-based storage for torrents, that isn't yet bound to a particular torrent.

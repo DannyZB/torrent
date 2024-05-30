@@ -3,7 +3,7 @@ package torrent
 import (
 	g "github.com/anacrolix/generics"
 
-	request_strategy "github.com/anacrolix/torrent/request-strategy"
+	request_strategy "github.com/dannyzb/torrent/request-strategy"
 )
 
 func (t *Torrent) updatePieceRequestOrderPiece(pieceIndex int) {

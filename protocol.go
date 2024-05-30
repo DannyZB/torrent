@@ -1,7 +1,7 @@
 package torrent
 
 import (
-	pp "github.com/anacrolix/torrent/peer_protocol"
+	pp "github.com/dannyzb/torrent/peer_protocol"
 )
 
 func makeCancelMessage(r Request) pp.Message {

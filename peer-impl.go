@@ -3,7 +3,7 @@ package torrent
 import (
 	"github.com/RoaringBitmap/roaring"
 
-	"github.com/anacrolix/torrent/metainfo"
+	"github.com/dannyzb/torrent/metainfo"
 )
 
 // Contains implementation details that differ between peer types, like Webseeds and regular

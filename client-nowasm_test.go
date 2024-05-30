@@ -10,8 +10,8 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stretchr/testify/require"
 
-	"github.com/anacrolix/torrent/internal/testutil"
-	"github.com/anacrolix/torrent/storage"
+	"github.com/dannyzb/torrent/internal/testutil"
+	"github.com/dannyzb/torrent/storage"
 )
 
 func TestBoltPieceCompletionClosedWhenClientClosed(t *testing.T) {
@@ -25,7 +25,7 @@ func TestBoltPieceCompletionClosedWhenClientClosed(t *testing.T) {
 	cl, err := NewClient(cfg)
 	c.Assert(err, qt.IsNil, qt.Commentf("%#v", err))
 	cl.Close()
-	// And again, https://github.com/anacrolix/torrent/issues/158
+	// And again, https://github.com/dannyzb/torrent/issues/158
 	cl, err = NewClient(cfg)
 	require.NoError(t, err)
 	cl.Close()

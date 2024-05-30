@@ -7,7 +7,7 @@ name = "go"
 enabled = true
 
   [analyzers.meta]
-  import_root = "github.com/anacrolix/torrent"
+  import_root = "github.com/dannyzb/torrent"
 
 [[transformers]]
 name = "gofmt"

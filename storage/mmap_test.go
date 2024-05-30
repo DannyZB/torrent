@@ -5,7 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 
-	"github.com/anacrolix/torrent/internal/testutil"
+	"github.com/dannyzb/torrent/internal/testutil"
 )
 
 func TestMmapWindows(t *testing.T) {

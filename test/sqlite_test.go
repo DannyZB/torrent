@@ -13,10 +13,10 @@ import (
 
 	qt "github.com/frankban/quicktest"
 
-	"github.com/anacrolix/torrent"
-	"github.com/anacrolix/torrent/bencode"
-	"github.com/anacrolix/torrent/metainfo"
-	sqliteStorage "github.com/anacrolix/torrent/storage/sqlite"
+	"github.com/dannyzb/torrent"
+	"github.com/dannyzb/torrent/bencode"
+	"github.com/dannyzb/torrent/metainfo"
+	sqliteStorage "github.com/dannyzb/torrent/storage/sqlite"
 )
 
 func TestSqliteStorageClosed(t *testing.T) {

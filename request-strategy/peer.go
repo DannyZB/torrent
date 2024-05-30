@@ -1,7 +1,7 @@
 package requestStrategy
 
 import (
-	typedRoaring "github.com/anacrolix/torrent/typed-roaring"
+	typedRoaring "github.com/dannyzb/torrent/typed-roaring"
 )
 
 type PeerRequestState struct {

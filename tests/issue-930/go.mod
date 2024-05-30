@@ -4,7 +4,7 @@ go 1.22.2
 
 require (
 	github.com/anacrolix/envpprof v1.3.0
-	github.com/anacrolix/torrent v1.55.0
+	github.com/dannyzb/torrent v1.55.0
 )
 
 require (

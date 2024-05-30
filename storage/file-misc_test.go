@@ -6,9 +6,9 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/anacrolix/torrent/common"
-	"github.com/anacrolix/torrent/metainfo"
-	"github.com/anacrolix/torrent/segments"
+	"github.com/dannyzb/torrent/common"
+	"github.com/dannyzb/torrent/metainfo"
+	"github.com/dannyzb/torrent/segments"
 )
 
 type requiredLength struct {

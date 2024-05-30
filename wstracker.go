@@ -13,9 +13,9 @@ import (
 	"github.com/pion/datachannel"
 	"github.com/pion/webrtc/v3"
 
-	"github.com/anacrolix/torrent/tracker"
-	httpTracker "github.com/anacrolix/torrent/tracker/http"
-	"github.com/anacrolix/torrent/webtorrent"
+	"github.com/dannyzb/torrent/tracker"
+	httpTracker "github.com/dannyzb/torrent/tracker/http"
+	"github.com/dannyzb/torrent/webtorrent"
 )
 
 type websocketTrackerStatus struct {

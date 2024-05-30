@@ -5,9 +5,9 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 
-	"github.com/anacrolix/torrent"
-	"github.com/anacrolix/torrent/tracker"
-	"github.com/anacrolix/torrent/tracker/udp"
+	"github.com/dannyzb/torrent"
+	"github.com/dannyzb/torrent/tracker"
+	"github.com/dannyzb/torrent/tracker/udp"
 )
 
 type AnnounceCmd struct {

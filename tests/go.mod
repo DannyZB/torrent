@@ -1,9 +1,9 @@
-module github.com/anacrolix/torrent/tests
+module github.com/dannyzb/torrent/tests
 
 go 1.22.0
 
 require (
-	github.com/anacrolix/torrent v1.55.0
+	github.com/dannyzb/torrent v1.55.0
 	github.com/frankban/quicktest v1.14.6
 )
 

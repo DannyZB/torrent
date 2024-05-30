@@ -5,10 +5,10 @@ import (
 
 	g "github.com/anacrolix/generics"
 
-	"github.com/anacrolix/torrent/metainfo"
-	pp "github.com/anacrolix/torrent/peer_protocol"
-	"github.com/anacrolix/torrent/storage"
-	infohash_v2 "github.com/anacrolix/torrent/types/infohash-v2"
+	"github.com/dannyzb/torrent/metainfo"
+	pp "github.com/dannyzb/torrent/peer_protocol"
+	"github.com/dannyzb/torrent/storage"
+	infohash_v2 "github.com/dannyzb/torrent/types/infohash-v2"
 )
 
 // Specifies a new torrent for adding to a client, or additions to an existing Torrent. There are

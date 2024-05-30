@@ -10,8 +10,8 @@ import (
 	"github.com/anacrolix/fuse"
 	fusefs "github.com/anacrolix/fuse/fs"
 
-	"github.com/anacrolix/torrent"
-	"github.com/anacrolix/torrent/metainfo"
+	"github.com/dannyzb/torrent"
+	"github.com/dannyzb/torrent/metainfo"
 )
 
 const (

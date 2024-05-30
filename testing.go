@@ -6,7 +6,7 @@ import (
 
 	"github.com/anacrolix/log"
 
-	pp "github.com/anacrolix/torrent/peer_protocol"
+	pp "github.com/dannyzb/torrent/peer_protocol"
 )
 
 func TestingConfig(t testing.TB) *ClientConfig {

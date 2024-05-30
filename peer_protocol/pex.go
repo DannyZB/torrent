@@ -3,7 +3,7 @@ package peer_protocol
 import (
 	"github.com/anacrolix/dht/v2/krpc"
 
-	"github.com/anacrolix/torrent/bencode"
+	"github.com/dannyzb/torrent/bencode"
 )
 
 type PexMsg struct {

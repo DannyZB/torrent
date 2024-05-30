@@ -16,7 +16,7 @@ import (
 	"github.com/pion/webrtc/v3"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/anacrolix/torrent/tracker"
+	"github.com/dannyzb/torrent/tracker"
 )
 
 type TrackerClientStats struct {

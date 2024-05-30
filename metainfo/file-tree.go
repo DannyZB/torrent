@@ -6,7 +6,7 @@ import (
 	g "github.com/anacrolix/generics"
 	"golang.org/x/exp/maps"
 
-	"github.com/anacrolix/torrent/bencode"
+	"github.com/dannyzb/torrent/bencode"
 )
 
 const FileTreePropertiesKey = ""

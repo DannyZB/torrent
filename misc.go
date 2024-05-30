@@ -8,10 +8,10 @@ import (
 	"github.com/anacrolix/missinggo/v2"
 	"golang.org/x/time/rate"
 
-	"github.com/anacrolix/torrent/metainfo"
-	pp "github.com/anacrolix/torrent/peer_protocol"
-	"github.com/anacrolix/torrent/types"
-	"github.com/anacrolix/torrent/types/infohash"
+	"github.com/dannyzb/torrent/metainfo"
+	pp "github.com/dannyzb/torrent/peer_protocol"
+	"github.com/dannyzb/torrent/types"
+	"github.com/dannyzb/torrent/types/infohash"
 )
 
 type (

@@ -5,8 +5,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/anacrolix/torrent"
-	"github.com/anacrolix/torrent/internal/testutil"
+	"github.com/dannyzb/torrent"
+	"github.com/dannyzb/torrent/internal/testutil"
 	qt "github.com/frankban/quicktest"
 )
 
