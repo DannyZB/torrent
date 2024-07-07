@@ -71,11 +71,12 @@ type RequestResult struct {
 
 func (ws *Client) NewRequest(r RequestSpec) Request {
 	ctx, cancel := context.WithCancel(context.Background())
-
-	cleanUrl := strings.TrimSpace(ws.Url)
-        cleanUrl = strings.Trim(cleanUrl, "\n")
-	
 	var requestParts []requestPart
+	
+	// Clean the URL
+	cleanUrl := strings.TrimSpace(ws.Url)
+	cleanUrl = strings.Trim(cleanUrl, "\n")
+
 	if !ws.fileIndex.Locate(r, func(i int, e segments.Extent) bool {
 		req, err := newRequest(
 			ctx,
