@@ -36,13 +36,46 @@ func (r Request) Cancel() {
 	r.cancel()
 }
 
+type Client struct {
+	HttpClient *http.Client
+	Url        string
+	fileIndex  segments.Index
+	info       *metainfo.Info
+	// The pieces we can request with the Url. We're more likely to ban/block at the file-level
+	// given that's how requests are mapped to webseeds, but the torrent.Client works at the piece
+	// level. We can map our file-level adjustments to the pieces here. This probably need to be
+	// private in the future, if Client ever starts removing pieces.
+	Pieces              roaring.Bitmap
+	ResponseBodyWrapper ResponseBodyWrapper
+	PathEscaper         PathEscaper
+}
+
+type ResponseBodyWrapper func(io.Reader) io.Reader
+
+func (me *Client) SetInfo(info *metainfo.Info) {
+	if !strings.HasSuffix(me.Url, "/") && info.IsDir() {
+		// In my experience, this is a non-conforming webseed. For example the
+		// http://ia600500.us.archive.org/1/items URLs in archive.org torrents.
+		return
+	}
+	me.fileIndex = segments.NewIndexFromSegments(common.TorrentOffsetFileSegments(info))
+	me.info = info
+	me.Pieces.AddRange(0, uint64(info.NumPieces()))
+}
+
+type RequestResult struct {
+	Bytes []byte
+	Err   error
+}
+
 func (ws *Client) NewRequest(r RequestSpec) Request {
 	ctx, cancel := context.WithCancel(context.Background())
-
-	cleanUrl := strings.TrimSpace(ws.Url)
-        cleanUrl = strings.Trim(cleanUrl, "\n")
-	
 	var requestParts []requestPart
+	
+	// Clean the URL
+	cleanUrl := strings.TrimSpace(ws.Url)
+	cleanUrl = strings.Trim(cleanUrl, "\n")
+
 	if !ws.fileIndex.Locate(r, func(i int, e segments.Extent) bool {
 		req, err := newRequest(
 			ctx,
@@ -148,10 +181,11 @@ var ErrTooFast = errors.New("making requests too fast")
 func readRequestPartResponses(ctx context.Context, parts []requestPart) (_ []byte, err error) {
 	var buf bytes.Buffer
 	for _, part := range parts {
-		result, err := part.do()
+		var resp *http.Response
+		resp, err = part.do()
 
 		if err == nil {
-			err = recvPartResult(ctx, &buf, part, result)
+			err = recvPartResult(ctx, &buf, part, resp)
 		}
 
 		if err != nil {
