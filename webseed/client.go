@@ -69,13 +69,17 @@ type RequestResult struct {
 	Err   error
 }
 
-func (ws *Client) StartNewRequest(r RequestSpec) Request {
-	ctx, cancel := context.WithCancel(context.TODO())
+func (ws *Client) NewRequest(r RequestSpec) Request {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	cleanUrl := strings.TrimSpace(ws.Url)
+        cleanUrl = strings.Trim(cleanUrl, "\n")
+	
 	var requestParts []requestPart
 	if !ws.fileIndex.Locate(r, func(i int, e segments.Extent) bool {
 		req, err := newRequest(
 			ctx,
-			ws.Url, i, ws.info, e.Start, e.Length,
+			cleanUrl, i, ws.info, e.Start, e.Length,
 			ws.PathEscaper,
 		)
 		if err != nil {
