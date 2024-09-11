@@ -83,6 +83,14 @@ func (ws *webseedPeer) _request(r Request) bool {
 // Returns true if we should look for another request to start. Returns false if we handled this
 // one.
 func (ws *webseedPeer) requestIteratorLocked(requesterIndex int, x RequestIndex) bool {
+	defer func() {
+		if r := recover(); r != nil {
+			// Convert the panic to an error
+			err = fmt.Errorf("panic in doRequest: %v", r)
+			ws.peer.logger.Printf("Recovered from panic in doRequest: %v", r)
+		}
+	}()
+	
 	r := ws.peer.t.requestIndexToRequest(x)
 	if _, ok := ws.activeRequests[r]; ok {
 		return true
