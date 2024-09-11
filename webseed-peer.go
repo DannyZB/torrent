@@ -77,6 +77,15 @@ func (ws *webseedPeer) _request(r Request) bool {
 }
 
 func (ws *webseedPeer) doRequest(r Request) error {
+	// Defer a function to recover from panics
+	defer func() {
+		if r := recover(); r != nil {
+			// Convert the panic to an error
+			err = fmt.Errorf("panic in doRequest: %v", r)
+			ws.peer.logger.Printf("Recovered from panic in doRequest: %v", r)
+		}
+	}()
+	
 	webseedRequest := ws.client.NewRequest(ws.intoSpec(r))
 	ws.activeRequests[r] = webseedRequest
 	err := func() error {
