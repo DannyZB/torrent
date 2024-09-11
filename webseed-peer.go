@@ -76,7 +76,7 @@ func (ws *webseedPeer) _request(r Request) bool {
 	return true
 }
 
-func (ws *webseedPeer) doRequest(r Request) error {
+func (ws *webseedPeer) doRequest(r Request) (err error) {
 	// Defer a function to recover from panics
 	defer func() {
 		if r := recover(); r != nil {
@@ -88,7 +88,7 @@ func (ws *webseedPeer) doRequest(r Request) error {
 	
 	webseedRequest := ws.client.NewRequest(ws.intoSpec(r))
 	ws.activeRequests[r] = webseedRequest
-	err := func() error {
+	err = func() error {
 		ws.requesterCond.L.Unlock()
 		defer ws.requesterCond.L.Lock()
 		return ws.requestResultHandler(r, webseedRequest)
