@@ -79,7 +79,6 @@ func (ws *webseedPeer) _request(r Request) bool {
 func (ws *webseedPeer) doRequest(r Request) (err error) {
 	// Defer a function to recover from panics
 
-	var err error
 	defer func() {
 		if r := recover(); r != nil {
 			// Convert the panic to an error
