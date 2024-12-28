@@ -86,7 +86,7 @@ func (ws *webseedPeer) requestIteratorLocked(requesterIndex int, x RequestIndex)
 	defer func() {
 		if r := recover(); r != nil {
 			// Convert the panic to an error
-			err = fmt.Errorf("panic in doRequest: %v", r)
+			err := fmt.Errorf("panic in doRequest: %v", r)
 			ws.peer.logger.Printf("Recovered from panic in doRequest: %v", r)
 		}
 	}()
