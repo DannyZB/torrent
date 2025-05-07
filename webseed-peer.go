@@ -99,7 +99,7 @@ func (ws *webseedPeer) requestIteratorLocked(requesterIndex int, x RequestIndex)
 	webseedRequest := ws.client.StartNewRequest(ws.intoSpec(r))
 	ws.activeRequests[r] = webseedRequest
 	locker := ws.requesterCond.L
-	err := func() error {
+	err = func() error {
 		locker.Unlock()
 		defer locker.Lock()
 		return ws.requestResultHandler(r, webseedRequest)
