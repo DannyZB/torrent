@@ -10,8 +10,8 @@ import (
 	"unsafe"
 
 	"github.com/anacrolix/missinggo/v2/panicif"
-	"github.com/dannyzb/torrent/internal/ctxrw"
-	"github.com/dannyzb/torrent/metainfo"
+	"github.com/anacrolix/torrent/internal/ctxrw"
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 type ExtensionBit uint

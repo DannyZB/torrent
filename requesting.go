@@ -15,8 +15,8 @@ import (
 	"github.com/anacrolix/log"
 	"github.com/anacrolix/multiless"
 
-	requestStrategy "github.com/dannyzb/torrent/request-strategy"
-	typedRoaring "github.com/dannyzb/torrent/typed-roaring"
+	requestStrategy "github.com/anacrolix/torrent/request-strategy"
+	typedRoaring "github.com/anacrolix/torrent/typed-roaring"
 )
 
 type (

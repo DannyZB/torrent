@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/dannyzb/torrent/internal/ctxrw"
+	"github.com/anacrolix/torrent/internal/ctxrw"
 )
 
 const (

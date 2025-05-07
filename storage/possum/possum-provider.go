@@ -12,7 +12,7 @@ import (
 	possum "github.com/anacrolix/possum/go"
 	possumResource "github.com/anacrolix/possum/go/resource"
 
-	"github.com/dannyzb/torrent/storage"
+	"github.com/anacrolix/torrent/storage"
 )
 
 // Extends possum resource.Provider with an efficient implementation of torrent

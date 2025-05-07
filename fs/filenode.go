@@ -6,7 +6,7 @@ import (
 	"github.com/anacrolix/fuse"
 	fusefs "github.com/anacrolix/fuse/fs"
 
-	"github.com/dannyzb/torrent"
+	"github.com/anacrolix/torrent"
 )
 
 type fileNode struct {

@@ -5,7 +5,7 @@ import (
 
 	"github.com/anacrolix/log"
 
-	"github.com/dannyzb/torrent/metainfo"
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 type PieceCompletionGetSetter interface {

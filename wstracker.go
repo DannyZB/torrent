@@ -12,9 +12,9 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v4"
 
-	"github.com/dannyzb/torrent/tracker"
-	httpTracker "github.com/dannyzb/torrent/tracker/http"
-	"github.com/dannyzb/torrent/webtorrent"
+	"github.com/anacrolix/torrent/tracker"
+	httpTracker "github.com/anacrolix/torrent/tracker/http"
+	"github.com/anacrolix/torrent/webtorrent"
 )
 
 type websocketTrackerStatus struct {

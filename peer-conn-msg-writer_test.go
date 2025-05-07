@@ -5,7 +5,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 
-	pp "github.com/dannyzb/torrent/peer_protocol"
+	pp "github.com/anacrolix/torrent/peer_protocol"
 )
 
 func PieceMsg(length int64) pp.Message {

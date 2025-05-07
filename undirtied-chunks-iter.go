@@ -1,7 +1,7 @@
 package torrent
 
 import (
-	typedRoaring "github.com/dannyzb/torrent/typed-roaring"
+	typedRoaring "github.com/anacrolix/torrent/typed-roaring"
 )
 
 func iterBitmapUnsetInRange[T typedRoaring.BitConstraint](

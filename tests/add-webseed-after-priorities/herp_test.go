@@ -1,8 +1,8 @@
 package webseed_partial_seed
 
 import (
-	"github.com/dannyzb/torrent"
-	"github.com/dannyzb/torrent/internal/testutil"
+	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/internal/testutil"
 	qt "github.com/frankban/quicktest"
 	"path/filepath"
 	"runtime"

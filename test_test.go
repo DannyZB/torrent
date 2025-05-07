@@ -5,7 +5,7 @@ package torrent
 import (
 	"testing"
 
-	"github.com/dannyzb/torrent/metainfo"
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 func newTestingClient(t testing.TB) *Client {

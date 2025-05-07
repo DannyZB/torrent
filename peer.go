@@ -17,11 +17,11 @@ import (
 	"github.com/anacrolix/missinggo/v2/bitmap"
 	"github.com/anacrolix/multiless"
 
-	"github.com/dannyzb/torrent/internal/alloclim"
-	"github.com/dannyzb/torrent/mse"
-	pp "github.com/dannyzb/torrent/peer_protocol"
-	request_strategy "github.com/dannyzb/torrent/request-strategy"
-	typedRoaring "github.com/dannyzb/torrent/typed-roaring"
+	"github.com/anacrolix/torrent/internal/alloclim"
+	"github.com/anacrolix/torrent/mse"
+	pp "github.com/anacrolix/torrent/peer_protocol"
+	request_strategy "github.com/anacrolix/torrent/request-strategy"
+	typedRoaring "github.com/anacrolix/torrent/typed-roaring"
 )
 
 type (

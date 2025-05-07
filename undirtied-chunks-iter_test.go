@@ -3,7 +3,7 @@ package torrent
 import (
 	"testing"
 
-	typedRoaring "github.com/dannyzb/torrent/typed-roaring"
+	typedRoaring "github.com/anacrolix/torrent/typed-roaring"
 )
 
 func BenchmarkIterUndirtiedRequestIndexesInPiece(b *testing.B) {

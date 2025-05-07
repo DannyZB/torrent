@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	app "github.com/anacrolix/gostdapp"
-	"github.com/dannyzb/torrent"
+	"github.com/anacrolix/torrent"
 )
 
 func main() {

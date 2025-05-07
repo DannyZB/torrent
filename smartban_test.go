@@ -8,7 +8,7 @@ import (
 	"github.com/anacrolix/missinggo/v2/iter"
 	"github.com/cespare/xxhash"
 
-	"github.com/dannyzb/torrent/smartban"
+	"github.com/anacrolix/torrent/smartban"
 )
 
 func benchmarkSmartBanRecordBlock[Sum comparable](b *testing.B, hash func([]byte) Sum) {

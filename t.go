@@ -9,7 +9,7 @@ import (
 	"github.com/anacrolix/missinggo/v2/pubsub"
 	"github.com/anacrolix/sync"
 
-	"github.com/dannyzb/torrent/metainfo"
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 // The Torrent's infohash. This is fixed and cannot change. It uniquely

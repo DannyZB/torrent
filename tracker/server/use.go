@@ -1,6 +1,6 @@
 package trackerServer
 
-import "github.com/dannyzb/torrent/tracker"
+import "github.com/anacrolix/torrent/tracker"
 
 type (
 	AnnounceRequest = tracker.AnnounceRequest

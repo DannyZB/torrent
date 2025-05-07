@@ -1,6 +1,6 @@
 package shared
 
-import "github.com/dannyzb/torrent/tracker/udp"
+import "github.com/anacrolix/torrent/tracker/udp"
 
 const (
 	None      udp.AnnounceEvent = iota

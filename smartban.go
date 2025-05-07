@@ -6,7 +6,7 @@ import (
 
 	g "github.com/anacrolix/generics"
 
-	"github.com/dannyzb/torrent/smartban"
+	"github.com/anacrolix/torrent/smartban"
 )
 
 type bannableAddr = netip.Addr

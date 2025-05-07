@@ -7,7 +7,7 @@ import (
 
 	g "github.com/anacrolix/generics"
 
-	"github.com/dannyzb/torrent/bencode"
+	"github.com/anacrolix/torrent/bencode"
 )
 
 const FileTreePropertiesKey = ""

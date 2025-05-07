@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dannyzb/torrent/metainfo"
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 func server() {

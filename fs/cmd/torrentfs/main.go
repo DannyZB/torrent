@@ -20,9 +20,9 @@ import (
 	"github.com/anacrolix/log"
 	"github.com/anacrolix/tagflag"
 
-	"github.com/dannyzb/torrent"
-	torrentfs "github.com/dannyzb/torrent/fs"
-	"github.com/dannyzb/torrent/util/dirwatch"
+	"github.com/anacrolix/torrent"
+	torrentfs "github.com/anacrolix/torrent/fs"
+	"github.com/anacrolix/torrent/util/dirwatch"
 )
 
 var logger = log.Default.WithNames("main")

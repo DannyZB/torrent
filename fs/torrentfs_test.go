@@ -19,10 +19,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dannyzb/torrent"
-	"github.com/dannyzb/torrent/internal/testutil"
-	"github.com/dannyzb/torrent/metainfo"
-	"github.com/dannyzb/torrent/storage"
+	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/internal/testutil"
+	"github.com/anacrolix/torrent/metainfo"
+	"github.com/anacrolix/torrent/storage"
 )
 
 func init() {

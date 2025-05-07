@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-quicktest/qt"
 
-	"github.com/dannyzb/torrent/metainfo"
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 func init() {

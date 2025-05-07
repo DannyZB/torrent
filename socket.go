@@ -82,7 +82,7 @@ func listenTcp(network, address string) (s socket, err error) {
 					err = nil
 				}
 				// This is no longer required I think, see
-				// https://github.com/dannyzb/torrent/discussions/856. I added this originally to
+				// https://github.com/anacrolix/torrent/discussions/856. I added this originally to
 				// allow dialling out from the client's listen port, but that doesn't really work. I
 				// think Linux older than ~2013 doesn't support SO_REUSEPORT.
 				if dialTcpFromListenPort {

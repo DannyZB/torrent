@@ -6,8 +6,8 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 
-	"github.com/dannyzb/torrent"
-	"github.com/dannyzb/torrent/tracker"
+	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/tracker"
 )
 
 type scrapeCfg struct {

@@ -8,8 +8,8 @@ import (
 
 	"github.com/anacrolix/log"
 
-	"github.com/dannyzb/torrent/bencode"
-	"github.com/dannyzb/torrent/metainfo"
+	"github.com/anacrolix/torrent/bencode"
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 // Add HTTP endpoints that serve the metainfo. They will be used if the torrent info isn't obtained

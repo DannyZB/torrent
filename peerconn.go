@@ -23,13 +23,13 @@ import (
 	"github.com/anacrolix/multiless"
 	"golang.org/x/time/rate"
 
-	"github.com/dannyzb/torrent/bencode"
-	"github.com/dannyzb/torrent/internal/alloclim"
-	"github.com/dannyzb/torrent/merkle"
-	"github.com/dannyzb/torrent/metainfo"
-	"github.com/dannyzb/torrent/mse"
-	pp "github.com/dannyzb/torrent/peer_protocol"
-	utHolepunch "github.com/dannyzb/torrent/peer_protocol/ut-holepunch"
+	"github.com/anacrolix/torrent/bencode"
+	"github.com/anacrolix/torrent/internal/alloclim"
+	"github.com/anacrolix/torrent/merkle"
+	"github.com/anacrolix/torrent/metainfo"
+	"github.com/anacrolix/torrent/mse"
+	pp "github.com/anacrolix/torrent/peer_protocol"
+	utHolepunch "github.com/anacrolix/torrent/peer_protocol/ut-holepunch"
 )
 
 type PeerStatus struct {
@@ -675,9 +675,9 @@ func (c *PeerConn) peerRequestDataReadFailed(err error, r Request) {
 	logLevel := log.Warning
 	if c.t.hasStorageCap() || c.t.closed.IsSet() {
 		// It's expected that pieces might drop. See
-		// https://github.com/dannyzb/torrent/issues/702#issuecomment-1000953313.
+		// https://github.com/anacrolix/torrent/issues/702#issuecomment-1000953313.
 		// may have been Dropped, and the user expects to own the files, see
-		// https://github.com/dannyzb/torrent/issues/980.
+		// https://github.com/anacrolix/torrent/issues/980.
 		logLevel = log.Debug
 	}
 	c.logger.Levelf(logLevel, "error reading chunk for peer Request %v: %v", r, err)

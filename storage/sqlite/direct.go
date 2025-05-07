@@ -13,8 +13,8 @@ import (
 	g "github.com/anacrolix/generics"
 	"github.com/anacrolix/squirrel"
 
-	"github.com/dannyzb/torrent/metainfo"
-	"github.com/dannyzb/torrent/storage"
+	"github.com/anacrolix/torrent/metainfo"
+	"github.com/anacrolix/torrent/storage"
 )
 
 // A convenience function that creates a connection pool, resource provider, and a pieces storage

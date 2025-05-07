@@ -36,21 +36,21 @@ import (
 	"github.com/pion/webrtc/v4"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/dannyzb/torrent/bencode"
-	"github.com/dannyzb/torrent/internal/check"
-	"github.com/dannyzb/torrent/internal/nestedmaps"
-	"github.com/dannyzb/torrent/merkle"
-	"github.com/dannyzb/torrent/metainfo"
-	pp "github.com/dannyzb/torrent/peer_protocol"
-	utHolepunch "github.com/dannyzb/torrent/peer_protocol/ut-holepunch"
-	request_strategy "github.com/dannyzb/torrent/request-strategy"
-	"github.com/dannyzb/torrent/storage"
-	"github.com/dannyzb/torrent/tracker"
-	typedRoaring "github.com/dannyzb/torrent/typed-roaring"
-	"github.com/dannyzb/torrent/types/infohash"
-	infohash_v2 "github.com/dannyzb/torrent/types/infohash-v2"
-	"github.com/dannyzb/torrent/webseed"
-	"github.com/dannyzb/torrent/webtorrent"
+	"github.com/anacrolix/torrent/bencode"
+	"github.com/anacrolix/torrent/internal/check"
+	"github.com/anacrolix/torrent/internal/nestedmaps"
+	"github.com/anacrolix/torrent/merkle"
+	"github.com/anacrolix/torrent/metainfo"
+	pp "github.com/anacrolix/torrent/peer_protocol"
+	utHolepunch "github.com/anacrolix/torrent/peer_protocol/ut-holepunch"
+	request_strategy "github.com/anacrolix/torrent/request-strategy"
+	"github.com/anacrolix/torrent/storage"
+	"github.com/anacrolix/torrent/tracker"
+	typedRoaring "github.com/anacrolix/torrent/typed-roaring"
+	"github.com/anacrolix/torrent/types/infohash"
+	infohash_v2 "github.com/anacrolix/torrent/types/infohash-v2"
+	"github.com/anacrolix/torrent/webseed"
+	"github.com/anacrolix/torrent/webtorrent"
 )
 
 var errTorrentClosed = errors.New("torrent closed")
@@ -275,7 +275,7 @@ func (t *Torrent) KnownSwarm() (ks []PeerInfo) {
 			// > what's appropriate. We can carry forward the SupportsEncryption value as we
 			// > received it from trackers/DHT/PEX, or just use the encryption state for the
 			// > connection. It's probably easiest to do the latter for now.
-			// https://github.com/dannyzb/torrent/pull/188
+			// https://github.com/anacrolix/torrent/pull/188
 			SupportsEncryption: conn.headerEncrypted,
 		})
 	}
@@ -946,7 +946,7 @@ func (t *Torrent) newMetaInfo() metainfo.MetaInfo {
 	return metainfo.MetaInfo{
 		CreationDate: time.Now().Unix(),
 		Comment:      "dynamic metainfo from client",
-		CreatedBy:    "https://github.com/dannyzb/torrent",
+		CreatedBy:    "https://github.com/anacrolix/torrent",
 		AnnounceList: t.metainfo.UpvertedAnnounceList().Clone(),
 		InfoBytes: func() []byte {
 			if t.haveInfo() {
@@ -969,7 +969,7 @@ func (t *Torrent) newMetaInfo() metainfo.MetaInfo {
 // Returns a count of bytes that are not complete in storage, and not pending being written to
 // storage. This value is from the perspective of the download manager, and may not agree with the
 // actual state in storage. If you want read data synchronously you should use a Reader. See
-// https://github.com/dannyzb/torrent/issues/828.
+// https://github.com/anacrolix/torrent/issues/828.
 func (t *Torrent) BytesMissing() (n int64) {
 	t.cl.rLock()
 	n = t.bytesMissingLocked()
@@ -2088,7 +2088,7 @@ func (t *Torrent) announceRequest(
 		NumWant: func() int32 {
 			if t.wantPeers() && len(t.cl.dialers) > 0 {
 				// Windozer has UDP packet limit. See:
-				// https://github.com/dannyzb/torrent/issues/764
+				// https://github.com/anacrolix/torrent/issues/764
 				return 200
 			} else {
 				return 0
@@ -2248,7 +2248,7 @@ func (t *Torrent) addPeers(peers []PeerInfo) (added int) {
 }
 
 // The returned TorrentStats may require alignment in memory. See
-// https://github.com/dannyzb/torrent/issues/383.
+// https://github.com/anacrolix/torrent/issues/383.
 func (t *Torrent) Stats() TorrentStats {
 	t.cl.rLock()
 	defer t.cl.rUnlock()
@@ -2535,7 +2535,7 @@ func (t *Torrent) pieceHashed(piece pieceIndex, passed bool, hashIoErr error) {
 					// Turns out it's still useful to ban peers like this because if there's only a
 					// single peer for a piece, and we never progress that piece to completion, we
 					// will never smart-ban them. Discovered in
-					// https://github.com/dannyzb/torrent/issues/715.
+					// https://github.com/anacrolix/torrent/issues/715.
 					t.logger.Levelf(
 						log.Warning,
 						"banning %v for being sole dirtier of piece %v after failed piece check",

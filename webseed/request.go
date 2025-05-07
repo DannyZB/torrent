@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/dannyzb/torrent/metainfo"
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 type PathEscaper func(pathComps []string) string

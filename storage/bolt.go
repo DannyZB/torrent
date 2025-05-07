@@ -12,7 +12,7 @@ import (
 	"github.com/anacrolix/missinggo/expect"
 	"go.etcd.io/bbolt"
 
-	"github.com/dannyzb/torrent/metainfo"
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 const (

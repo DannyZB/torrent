@@ -14,7 +14,7 @@ import (
 	"github.com/anacrolix/missinggo/v2/resource"
 	"github.com/anacrolix/sync"
 
-	"github.com/dannyzb/torrent/metainfo"
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 type piecePerResource struct {

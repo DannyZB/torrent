@@ -3,8 +3,8 @@ package torrent
 import (
 	g "github.com/anacrolix/generics"
 
-	request_strategy "github.com/dannyzb/torrent/request-strategy"
-	"github.com/dannyzb/torrent/storage"
+	request_strategy "github.com/anacrolix/torrent/request-strategy"
+	"github.com/anacrolix/torrent/storage"
 )
 
 // It's probably possible to track whether the piece moves around in the btree to be more efficient

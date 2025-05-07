@@ -39,7 +39,7 @@ var announceEventStrings = []string{"", "completed", "started", "stopped"}
 
 func (e AnnounceEvent) String() string {
 	// See BEP 3, "event", and
-	// https://github.com/dannyzb/torrent/issues/416#issuecomment-751427001. Return a safe default
+	// https://github.com/anacrolix/torrent/issues/416#issuecomment-751427001. Return a safe default
 	// in case event values are not sanitized.
 	if e < 0 || int(e) >= len(announceEventStrings) {
 		return ""

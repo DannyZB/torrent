@@ -1,7 +1,7 @@
 package torrent
 
 import (
-	"github.com/dannyzb/torrent/typed-roaring"
+	"github.com/anacrolix/torrent/typed-roaring"
 )
 
 // Return the number of bits set in the range. To do this we need the rank of the item before the

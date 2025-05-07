@@ -12,9 +12,9 @@ import (
 	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/log"
 
-	trHttp "github.com/dannyzb/torrent/tracker/http"
-	"github.com/dannyzb/torrent/tracker/shared"
-	"github.com/dannyzb/torrent/tracker/udp"
+	trHttp "github.com/anacrolix/torrent/tracker/http"
+	"github.com/anacrolix/torrent/tracker/shared"
+	"github.com/anacrolix/torrent/tracker/udp"
 )
 
 const (

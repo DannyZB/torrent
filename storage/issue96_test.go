@@ -7,7 +7,7 @@ import (
 	g "github.com/anacrolix/generics"
 	"github.com/go-quicktest/qt"
 
-	"github.com/dannyzb/torrent/metainfo"
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 func testMarkedCompleteMissingOnRead(t *testing.T, csf func(string) ClientImplCloser) {

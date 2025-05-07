@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-quicktest/qt"
 
-	"github.com/dannyzb/torrent/internal/testutil"
+	"github.com/anacrolix/torrent/internal/testutil"
 )
 
 func TestMmapWindows(t *testing.T) {

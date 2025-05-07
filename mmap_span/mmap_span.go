@@ -7,7 +7,7 @@ import (
 	"io/fs"
 	"sync"
 
-	"github.com/dannyzb/torrent/segments"
+	"github.com/anacrolix/torrent/segments"
 )
 
 type Mmap interface {

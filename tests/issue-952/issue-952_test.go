@@ -5,9 +5,9 @@ import (
 
 	qt "github.com/frankban/quicktest"
 
-	"github.com/dannyzb/torrent/bencode"
-	"github.com/dannyzb/torrent/metainfo"
-	"github.com/dannyzb/torrent/types/infohash"
+	"github.com/anacrolix/torrent/bencode"
+	"github.com/anacrolix/torrent/metainfo"
+	"github.com/anacrolix/torrent/types/infohash"
 )
 
 type scrapeResponse struct {

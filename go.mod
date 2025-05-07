@@ -1,4 +1,4 @@
-module github.com/dannyzb/torrent
+module github.com/anacrolix/torrent
 
 go 1.23
 
@@ -65,13 +65,11 @@ require (
 	github.com/anacrolix/missinggo/perf v1.0.0 // indirect
 	github.com/anacrolix/mmsg v1.0.1 // indirect
 	github.com/anacrolix/stm v0.4.1-0.20221221005312-96d17df0e496 // indirect
-	github.com/anacrolix/torrent v1.48.1-0.20230103142631-c20f73d53e9f // indirect
 	github.com/benbjohnson/immutable v0.4.1-0.20221220213129-8932b999621d // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.2.2 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
-	github.com/dannyzb/dht/v2 v2.0.0-20250507064540-e7c61881fc47 // indirect
 	github.com/go-llsqlite/crawshaw v0.5.2-0.20240425034140-f30eb7704568 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -159,8 +157,6 @@ retract (
 	v1.39.0
 	// peer-requesting doesn't scale
 	[v1.34.0, v1.38.1]
-	// Indefinite outgoing requests on storage write errors. https://github.com/dannyzb/torrent/issues/889
+	// Indefinite outgoing requests on storage write errors. https://github.com/anacrolix/torrent/issues/889
 	[v1.29.0, v1.53.2]
 )
-
-replace github.com/anacrolix/torrent => github.com/dannyzb/torrent v0.0.0-20241228163132-01bdb041c723

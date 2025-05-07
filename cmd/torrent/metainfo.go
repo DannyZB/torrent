@@ -11,7 +11,7 @@ import (
 	"github.com/anacrolix/bargle"
 	"github.com/bradfitz/iter"
 
-	"github.com/dannyzb/torrent/metainfo"
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 type pprintMetainfoFlags struct {

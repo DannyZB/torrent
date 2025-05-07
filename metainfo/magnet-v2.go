@@ -10,7 +10,7 @@ import (
 	g "github.com/anacrolix/generics"
 	"github.com/multiformats/go-multihash"
 
-	infohash_v2 "github.com/dannyzb/torrent/types/infohash-v2"
+	infohash_v2 "github.com/anacrolix/torrent/types/infohash-v2"
 )
 
 // Magnet link components.

@@ -8,10 +8,10 @@ import (
 	"github.com/anacrolix/bargle"
 	"github.com/anacrolix/log"
 
-	"github.com/dannyzb/torrent"
-	"github.com/dannyzb/torrent/bencode"
-	"github.com/dannyzb/torrent/metainfo"
-	"github.com/dannyzb/torrent/storage"
+	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/bencode"
+	"github.com/anacrolix/torrent/metainfo"
+	"github.com/anacrolix/torrent/storage"
 )
 
 func serve() (cmd bargle.Command) {

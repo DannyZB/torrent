@@ -8,7 +8,7 @@ import (
 	g "github.com/anacrolix/generics"
 	"github.com/anacrolix/missinggo/v2"
 
-	"github.com/dannyzb/torrent/metainfo"
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 type Client struct {
