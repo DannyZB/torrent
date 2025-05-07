@@ -141,7 +141,7 @@ func MustMarshal(v interface{}) []byte {
 func Unmarshal(data []byte, v interface{}) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("illegal keys in bencoded value: %v", r)
+			err = errors.New(fmt.Sprintf("illegal keys in bencoded value: %v", r))
 		}
 	}()
 	
