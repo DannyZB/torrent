@@ -3352,12 +3352,21 @@ func (t *Torrent) eachShortInfohash(each func(short [20]byte)) {
 }
 
 func (t *Torrent) getFileByPiecesRoot(hash [32]byte) *File {
-	for _, f := range *t.files {
-		if f.piecesRoot.Unwrap() == hash {
-			return f
-		}
-	}
-	return nil
+    // t.files can be nil while the torrent is still building.
+    if t.files == nil {
+        return nil
+    }
+
+    for _, f := range *t.files {
+        // piecesRoot is an option → make sure it is set before unwrapping.
+        if !f.piecesRoot.Ok {
+            continue
+        }
+        if f.piecesRoot.Value == hash {
+            return f
+        }
+    }
+    return nil
 }
 
 func (t *Torrent) pieceLayers() (pieceLayers map[string]string) {

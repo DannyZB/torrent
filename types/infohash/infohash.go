@@ -2,7 +2,7 @@ package infohash
 
 import (
 	"crypto/sha1"
-	"crypto/sha256"
+	"github.com/minio/sha256-simd"
 	"encoding"
 	"encoding/hex"
 	"fmt"

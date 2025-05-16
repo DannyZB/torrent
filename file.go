@@ -1,7 +1,7 @@
 package torrent
 
 import (
-	"crypto/sha256"
+	"github.com/minio/sha256-simd"
 
 	"github.com/RoaringBitmap/roaring"
 	g "github.com/anacrolix/generics"
