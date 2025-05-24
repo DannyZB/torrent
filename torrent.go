@@ -3169,16 +3169,16 @@ func (t *Torrent) peerConnsWithDialAddrPort(target netip.AddrPort) (ret []*PeerC
 func wrapUtHolepunchMsgForPeerConn(
 	recipient *PeerConn,
 	msg utHolepunch.Msg,
-) pp.Message {
+) (pp.Message, error) {
 	extendedPayload, err := msg.MarshalBinary()
 	if err != nil {
-		panic(err)
+		return pp.Message{}, fmt.Errorf("failed to marshal holepunch message: %w", err)
 	}
 	return pp.Message{
 		Type:            pp.Extended,
 		ExtendedID:      MapMustGet(recipient.PeerExtensionIDs, utHolepunch.ExtensionName),
 		ExtendedPayload: extendedPayload,
-	}
+	}, nil
 }
 
 func sendUtHolepunchMsg(
@@ -3193,7 +3193,11 @@ func sendUtHolepunchMsg(
 		ErrCode:  errCode,
 	}
 	incHolepunchMessagesSent(holepunchMsg)
-	ppMsg := wrapUtHolepunchMsgForPeerConn(pc, holepunchMsg)
+	ppMsg, err := wrapUtHolepunchMsgForPeerConn(pc, holepunchMsg)
+	if err != nil {
+		pc.logger.Printf("failed to create holepunch message: %v", err)
+		return
+	}
 	pc.write(ppMsg)
 }
 

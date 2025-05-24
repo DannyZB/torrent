@@ -1008,7 +1008,7 @@ func (c *PeerConn) onReadExtendedMsg(id pp.ExtensionNumber, payload []byte) (err
 		err = c.t.handleReceivedUtHolepunchMsg(msg, c)
 		return
 	default:
-		panic(fmt.Sprintf("unhandled builtin extension protocol %q", extensionName))
+		return fmt.Errorf("unhandled builtin extension protocol %q", extensionName)
 	}
 }
 
@@ -1070,7 +1070,9 @@ another:
 			}
 			res := c.t.cl.config.UploadRateLimiter.ReserveN(time.Now(), int(r.Length))
 			if !res.OK() {
-				panic(fmt.Sprintf("upload rate limiter burst size < %d", r.Length))
+				c.logger.Printf("upload rate limiter burst size insufficient for request length %d", r.Length)
+				// Skip this request and continue with others
+				continue
 			}
 			delay := res.Delay()
 			if delay > 0 {
@@ -1118,7 +1120,8 @@ func (c *PeerConn) sendChunk(r Request, msg func(pp.Message) bool, state *peerRe
 
 func (c *Peer) setTorrent(t *Torrent) {
 	if c.t != nil {
-		panic("connection already associated with a torrent")
+		c.logger.Printf("attempt to reassociate connection with torrent, already associated with %v", c.t)
+		return
 	}
 	c.t = t
 	c.logger.WithDefaultLevel(log.Debug).Printf("set torrent=%v", t)
@@ -1299,7 +1302,8 @@ file:
 			if length < 2 {
 				// This should have been filtered out by baseLayer and pieces root as piece hash
 				// checks.
-				panic(length)
+				pc.protocolLogger.Levelf(log.Warning, "invalid hash request length %d for file pieces", length)
+				continue
 			}
 			if length%2 != 0 {
 				pc.protocolLogger.Levelf(log.Warning, "requesting odd hashes length %d", length)
@@ -1333,7 +1337,8 @@ func (pc *PeerConn) onReadHashes(msg *pp.Message) (err error) {
 	}
 	if msg.ProofLayers != 0 {
 		// This isn't handled yet.
-		panic(msg.ProofLayers)
+		pc.protocolLogger.Levelf(log.Debug, "received hash message with unsupported proof layers: %d", msg.ProofLayers)
+		return errors.New("proof layers not supported yet")
 	}
 	copy(filePieceHashes[msg.Index:], msg.Hashes)
 	root := merkle.RootWithPadHash(

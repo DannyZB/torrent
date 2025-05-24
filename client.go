@@ -1646,12 +1646,14 @@ func (cl *Client) banPeerIP(ip net.IP) {
 	// addresses directly to v4on6, which doesn't compare equal with v4.
 	ipAddr, ok := netip.AddrFromSlice(ip)
 	if !ok {
-		panic(ip)
+		cl.logger.Printf("cannot ban invalid IP address: %v", ip)
+		return
 	}
 	g.MakeMapIfNilAndSet(&cl.badPeerIPs, ipAddr, struct{}{})
 	for t := range cl.torrents {
 		t.iterPeers(func(p *Peer) {
-			if p.remoteIp().Equal(ip) {
+			peerIP := p.remoteIp()
+			if peerIP != nil && peerIP.Equal(ip) {
 				t.logger.Levelf(log.Warning, "dropping peer %v with banned ip %v", p, ip)
 				// Should this be a close?
 				p.drop()

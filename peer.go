@@ -461,14 +461,15 @@ func (cn *Peer) shouldRequest(r RequestIndex) error {
 func (cn *Peer) mustRequest(r RequestIndex) bool {
 	more, err := cn.request(r)
 	if err != nil {
-		panic(err)
+		cn.logger.Printf("failed to make request %v: %v", r, err)
+		return false
 	}
 	return more
 }
 
 func (cn *Peer) request(r RequestIndex) (more bool, err error) {
 	if err := cn.shouldRequest(r); err != nil {
-		panic(err)
+		return false, err
 	}
 	if cn.requestState.Requests.Contains(r) {
 		return true, nil
@@ -612,7 +613,7 @@ func (c *Peer) decExpectedChunkReceive(r RequestIndex) {
 	} else if count > 1 {
 		c.validReceiveChunks[r] = count - 1
 	} else {
-		panic(r)
+		c.logger.Printf("unexpected chunk accounting for request %v: count=%d", r, count)
 	}
 }
 
@@ -850,6 +851,9 @@ func (c *Peer) peerPriority() (peerPriority, error) {
 }
 
 func (c *Peer) remoteIp() net.IP {
+	if c.RemoteAddr == nil {
+		return nil
+	}
 	host, _, _ := net.SplitHostPort(c.RemoteAddr.String())
 	return net.ParseIP(host)
 }

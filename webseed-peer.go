@@ -211,7 +211,8 @@ func (ws *webseedPeer) requestResultHandler(r Request, webseedRequest webseed.Re
 			}
 		}
 		if !ws.peer.remoteRejectedRequest(ws.peer.t.requestIndexFromRequest(r)) {
-			panic("invalid reject")
+			ws.peer.logger.Printf("Request %v rejected: invalid reject", r)
+			return errors.New("invalid reject")
 		}
 		return err
 	}
@@ -222,7 +223,8 @@ func (ws *webseedPeer) requestResultHandler(r Request, webseedRequest webseed.Re
 		Piece: result.Bytes,
 	})
 	if err != nil {
-		panic(err)
+		ws.peer.logger.Printf("error receiving chunk for request %v: %v", r, err)
+		return err
 	}
 	return err
 }
