@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strconv"
 	"sync/atomic"
 )
 
@@ -22,7 +23,7 @@ func (me *Count) Int64() int64 {
 }
 
 func (me *Count) String() string {
-	return fmt.Sprintf("%v", me.Int64())
+	return strconv.FormatInt(me.Int64(), 10)
 }
 
 func (me *Count) MarshalJSON() ([]byte, error) {

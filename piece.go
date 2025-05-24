@@ -105,6 +105,15 @@ func (p *Piece) unpendChunkIndex(i chunkIndexType) {
 	p.readerCond.Broadcast()
 }
 
+func (p *Piece) unpendChunkRange(start, end chunkIndexType) {
+	offset := p.requestIndexOffset()
+	for i := start; i < end; i++ {
+		p.t.dirtyChunks.Add(offset + i)
+	}
+	p.t.updatePieceRequestOrderPiece(p.index)
+	p.readerCond.Broadcast()
+}
+
 func (p *Piece) pendChunkIndex(i RequestIndex) {
 	p.t.dirtyChunks.Remove(p.requestIndexOffset() + i)
 	p.t.updatePieceRequestOrderPiece(p.index)
@@ -149,17 +158,27 @@ func (p *Piece) chunkIndexSpec(chunk chunkIndexType) ChunkSpec {
 }
 
 func (p *Piece) numDirtyBytes() (ret pp.Integer) {
-	// defer func() {
-	// 	if ret > p.length() {
-	// 		panic("too many dirty bytes")
-	// 	}
-	// }()
-	numRegularDirtyChunks := p.numDirtyChunks()
-	if p.chunkIndexDirty(p.numChunks() - 1) {
-		numRegularDirtyChunks--
-		ret += p.chunkIndexSpec(p.lastChunkIndex()).Length
+	numChunks := p.numChunks()
+	if numChunks == 0 {
+		return 0
 	}
-	ret += pp.Integer(numRegularDirtyChunks) * p.chunkSize()
+	
+	lastChunkIndex := numChunks - 1
+	chunkSize := p.chunkSize()
+	
+	// Count dirty chunks more efficiently
+	dirtyCount := p.numDirtyChunks()
+	if dirtyCount == 0 {
+		return 0
+	}
+	
+	// If last chunk is dirty, handle it separately for accurate byte count
+	if p.chunkIndexDirty(lastChunkIndex) {
+		dirtyCount--
+		ret += p.chunkIndexSpec(lastChunkIndex).Length
+	}
+	
+	ret += pp.Integer(dirtyCount) * chunkSize
 	return
 }
 

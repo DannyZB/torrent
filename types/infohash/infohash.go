@@ -34,7 +34,7 @@ func (t T) String() string {
 }
 
 func (t T) HexString() string {
-	return fmt.Sprintf("%x", t[:])
+	return hex.EncodeToString(t[:])
 }
 
 func (t *T) FromHexString(s string) (err error) {

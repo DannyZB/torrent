@@ -20,6 +20,7 @@ import (
 	"text/tabwriter"
 	"time"
 	"unsafe"
+	"strconv"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/anacrolix/chansync"
@@ -250,6 +251,13 @@ func (t *Torrent) Closed() events.Done {
 // KnownSwarm returns the known subset of the peers in the Torrent's swarm, including active,
 // pending, and half-open peers.
 func (t *Torrent) KnownSwarm() (ks []PeerInfo) {
+	// Pre-allocate with estimated capacity to reduce allocations
+	estimatedPeers := t.peers.Len() + len(t.conns)
+	for _, attempts := range t.halfOpen {
+		estimatedPeers += len(attempts)
+	}
+	ks = make([]PeerInfo, 0, estimatedPeers)
+
 	// Add pending peers to the list
 	t.peers.Each(func(peer PeerInfo) {
 		ks = append(ks, peer)
@@ -728,7 +736,12 @@ type pieceAvailabilityRun struct {
 }
 
 func (me pieceAvailabilityRun) String() string {
-	return fmt.Sprintf("%v(%v)", me.Count, me.Availability)
+	var b strings.Builder
+	b.WriteString(strconv.Itoa(int(me.Count)))
+	b.WriteByte('(')
+	b.WriteString(strconv.Itoa(me.Availability))
+	b.WriteByte(')')
+	return b.String()
 }
 
 func (t *Torrent) pieceAvailabilityRuns() (ret []pieceAvailabilityRun) {
@@ -743,6 +756,7 @@ func (t *Torrent) pieceAvailabilityRuns() (ret []pieceAvailabilityRun) {
 }
 
 func (t *Torrent) pieceAvailabilityFrequencies() (freqs []int) {
+	// Pre-allocate with exact size needed (max peers + 1 for zero availability)
 	freqs = make([]int, t.numActivePeers()+1)
 	for i := range t.pieces {
 		freqs[t.piece(i).availability()]++
@@ -766,45 +780,42 @@ func (t *Torrent) pieceStateRuns() (ret PieceStateRuns) {
 
 // Produces a small string representing a PieceStateRun.
 func (psr PieceStateRun) String() (ret string) {
-	ret = fmt.Sprintf("%d", psr.Length)
-	ret += func() string {
-		switch psr.Priority {
-		case PiecePriorityNext:
-			return "N"
-		case PiecePriorityNormal:
-			return "."
-		case PiecePriorityReadahead:
-			return "R"
-		case PiecePriorityNow:
-			return "!"
-		case PiecePriorityHigh:
-			return "H"
-		default:
-			return ""
-		}
-	}()
+	var b strings.Builder
+	b.WriteString(strconv.Itoa(psr.Length))
+	switch psr.Priority {
+	case PiecePriorityNext:
+		b.WriteByte('N')
+	case PiecePriorityNormal:
+		b.WriteByte('.')
+	case PiecePriorityReadahead:
+		b.WriteByte('R')
+	case PiecePriorityNow:
+		b.WriteByte('!')
+	case PiecePriorityHigh:
+		b.WriteByte('H')
+	}
 	if psr.Hashing {
-		ret += "H"
+		b.WriteByte('H')
 	}
 	if psr.QueuedForHash {
-		ret += "Q"
+		b.WriteByte('Q')
 	}
 	if psr.Marking {
-		ret += "M"
+		b.WriteByte('M')
 	}
 	if psr.Partial {
-		ret += "P"
+		b.WriteByte('P')
 	}
 	if psr.Complete {
-		ret += "C"
+		b.WriteByte('C')
 	}
 	if !psr.Ok {
-		ret += "?"
+		b.WriteByte('?')
 	}
 	if psr.MissingPieceLayerHash {
-		ret += "h"
+		b.WriteByte('h')
 	}
-	return
+	return b.String()
 }
 
 func (t *Torrent) writeStatus(w io.Writer) {
@@ -1363,8 +1374,7 @@ func (t *Torrent) worstBadConnFromSlice(opts worseConnLensOpts, sl []*PeerConn) 
 
 // The worst connection is one that hasn't been sent, or sent anything useful for the longest. A bad
 // connection is one that usually sends us unwanted pieces, or has been in the worse half of the
-// established connections for more than a minute. This is O(n log n). If there was a way to not
-// consider the position of a conn relative to the total number, it could be reduced to O(n).
+// established connections for more than a minute.
 func (t *Torrent) worstBadConn(opts worseConnLensOpts) (ret *PeerConn) {
 	t.withUnclosedConns(func(ucs []*PeerConn) {
 		ret = t.worstBadConnFromSlice(opts, ucs)
@@ -2702,6 +2712,8 @@ func (t *Torrent) clearPieceTouchers(pi pieceIndex) {
 }
 
 func (t *Torrent) peersAsSlice() (ret []*Peer) {
+	// Pre-allocate with exact capacity to avoid reallocations
+	ret = make([]*Peer, 0, len(t.conns)+len(t.webSeeds))
 	t.iterPeers(func(p *Peer) {
 		ret = append(ret, p)
 	})
@@ -3153,6 +3165,8 @@ func (t *Torrent) checkValidReceiveChunk(r Request) error {
 }
 
 func (t *Torrent) peerConnsWithDialAddrPort(target netip.AddrPort) (ret []*PeerConn) {
+	// Pre-allocate with estimated capacity (usually very few matches)
+	ret = make([]*PeerConn, 0, 4)
 	for pc := range t.conns {
 		dialAddr, err := pc.remoteDialAddrPort()
 		if err != nil {
@@ -3412,4 +3426,120 @@ func (t *Torrent) Complete() chansync.ReadOnlyFlag {
 
 func (t *Torrent) slogger() *slog.Logger {
 	return t.logger.Slogger()
+}
+
+// TrackerStatus represents the status of a tracker for this torrent
+type TrackerStatus struct {
+	// URL of the tracker
+	URL string
+	// LastError contains the most recent error from this tracker, nil if last announce was successful
+	LastError error
+	// LastAnnounce is the time of the last announce attempt
+	LastAnnounce time.Time
+	// NumPeers is the number of peers returned by the last successful announce
+	NumPeers int
+	// Interval is the announce interval suggested by the tracker
+	Interval time.Duration
+	// NextAnnounce is the calculated time for the next announce
+	NextAnnounce time.Time
+}
+
+// IsWorking returns true if the tracker is responding without errors
+func (ts TrackerStatus) IsWorking() bool {
+	return ts.LastError == nil && !ts.LastAnnounce.IsZero()
+}
+
+// ErrorType returns a categorized error type for common tracker failures
+func (ts TrackerStatus) ErrorType() string {
+	if ts.LastError == nil {
+		return ""
+	}
+	
+	errStr := ts.LastError.Error()
+	switch {
+	// HTTP status code errors (from tracker/http/http.go)
+	case strings.Contains(errStr, "response from tracker"):
+		if strings.Contains(errStr, "404") || strings.Contains(errStr, "Not Found") {
+			return "tracker_not_found"
+		} else if strings.Contains(errStr, "503") || strings.Contains(errStr, "Service Unavailable") {
+			return "tracker_unavailable"
+		} else if strings.Contains(errStr, "401") || strings.Contains(errStr, "403") || strings.Contains(errStr, "Unauthorized") || strings.Contains(errStr, "Forbidden") {
+			return "authentication_failed"
+		} else {
+			return "tracker_http_error"
+		}
+	
+	// Tracker failure reasons (from tracker/http/http.go line 128)
+	case strings.Contains(errStr, "tracker gave failure reason"):
+		reason := errStr
+		switch {
+		case strings.Contains(reason, "unregistered") || strings.Contains(reason, "not registered") || strings.Contains(reason, "not found"):
+			return "torrent_not_registered"
+		case strings.Contains(reason, "passkey") || strings.Contains(reason, "banned") || strings.Contains(reason, "not authorized"):
+			return "authentication_failed"
+		default:
+			return "tracker_failure"
+		}
+	
+	// DNS/Network errors (from tracker_scraper.go)
+	case strings.Contains(errStr, "error getting ip") || strings.Contains(errStr, "no ips") || strings.Contains(errStr, "no acceptable ips"):
+		return "dns_error"
+	case strings.Contains(errStr, "client is closed"):
+		return "client_closed"
+	
+	// Context/timeout errors
+	case strings.Contains(errStr, "context deadline exceeded") || strings.Contains(errStr, "timeout"):
+		return "timeout"
+	case strings.Contains(errStr, "context canceled"):
+		return "cancelled"
+	
+	// Network connectivity errors
+	case strings.Contains(errStr, "connection refused") || strings.Contains(errStr, "network is unreachable") || strings.Contains(errStr, "no route to host"):
+		return "network_error"
+	
+	// UDP tracker specific errors
+	case strings.Contains(errStr, "Connection ID missmatch"):
+		return "udp_connection_error"
+	
+	default:
+		return "unknown_error"
+	}
+}
+
+// TrackerStatuses returns the status of all trackers for this torrent including any errors
+func (t *Torrent) TrackerStatuses() []TrackerStatus {
+	t.cl.rLock()
+	defer t.cl.rUnlock()
+	
+	// Pre-allocate with capacity based on number of tracker announcers
+	statuses := make([]TrackerStatus, 0, len(t.trackerAnnouncers))
+	for _, announcer := range t.trackerAnnouncers {
+		switch ta := announcer.(type) {
+		case *trackerScraper:
+			status := TrackerStatus{
+				URL:          ta.u.String(),
+				LastError:    ta.lastAnnounce.Err,
+				LastAnnounce: ta.lastAnnounce.Completed,
+				NumPeers:     ta.lastAnnounce.NumPeers,
+				Interval:     ta.lastAnnounce.Interval,
+			}
+			
+			// Calculate next announce time
+			if !ta.lastAnnounce.Completed.IsZero() && ta.lastAnnounce.Interval > 0 {
+				status.NextAnnounce = ta.lastAnnounce.Completed.Add(ta.lastAnnounce.Interval)
+			}
+			
+			statuses = append(statuses, status)
+		case *websocketTrackerStatus:
+			// Add support for websocket trackers if needed
+			status := TrackerStatus{
+				URL: ta.url.String(),
+				// Websocket trackers don't have the same error structure
+				// This would need to be extended based on websocket tracker implementation
+			}
+			statuses = append(statuses, status)
+		}
+	}
+	
+	return statuses
 }
