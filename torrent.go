@@ -1520,7 +1520,6 @@ func (t *Torrent) updatePiecePriorities(begin, end pieceIndex, reason updateRequ
 	
 	// First pass: update all piece priorities without triggering peer updates
 	for i := begin; i < end; i++ {
-		t.logger.Slogger().Debug("updatePiecePriority", "piece", i, "reason", reason)
 		if t.updatePiecePriorityNoRequests(i) && !t.disableTriggers {
 			piecesNeedingPeerUpdates = append(piecesNeedingPeerUpdates, i)
 		}
@@ -1639,6 +1638,21 @@ func (t *Torrent) numOutgoingConns() (ret int) {
 	for c := range t.conns {
 		if c.outgoing {
 			ret++
+		}
+	}
+	return
+}
+
+// numIncomingAndOutgoingConns counts both incoming and outgoing connections in a single pass.
+// This is more efficient than calling numReceivedConns() and numOutgoingConns() separately
+// when both values are needed.
+func (t *Torrent) numIncomingAndOutgoingConns() (incoming, outgoing int) {
+	for c := range t.conns {
+		if c.Discovery == PeerSourceIncoming {
+			incoming++
+		}
+		if c.outgoing {
+			outgoing++
 		}
 	}
 	return
@@ -2378,8 +2392,7 @@ func (t *Torrent) addPeerConn(c *PeerConn) (err error) {
 		}
 	}
 	if len(t.conns) >= t.maxEstablishedConns {
-		numOutgoing := t.numOutgoingConns()
-		numIncoming := len(t.conns) - numOutgoing
+		numIncoming, numOutgoing := t.numIncomingAndOutgoingConns()
 		c := t.worstBadConn(worseConnLensOpts{
 			// We've already established that we have too many connections at this point, so we just
 			// need to match what kind we have too many of vs. what we're trying to add now.
@@ -2437,9 +2450,9 @@ func (t *Torrent) wantOutgoingConns() bool {
 	if len(t.conns) < t.maxEstablishedConns {
 		return true
 	}
-	numIncomingConns := len(t.conns) - t.numOutgoingConns()
+	numIncoming, numOutgoing := t.numIncomingAndOutgoingConns()
 	return t.worstBadConn(worseConnLensOpts{
-		incomingIsBad: numIncomingConns-t.numOutgoingConns() > 1,
+		incomingIsBad: numIncoming-numOutgoing > 1,
 		outgoingIsBad: false,
 	}) != nil
 }
@@ -2451,10 +2464,10 @@ func (t *Torrent) wantIncomingConns() bool {
 	if len(t.conns) < t.maxEstablishedConns {
 		return true
 	}
-	numIncomingConns := len(t.conns) - t.numOutgoingConns()
+	numIncoming, numOutgoing := t.numIncomingAndOutgoingConns()
 	return t.worstBadConn(worseConnLensOpts{
 		incomingIsBad: false,
-		outgoingIsBad: t.numOutgoingConns()-numIncomingConns > 1,
+		outgoingIsBad: numOutgoing-numIncoming > 1,
 	}) != nil
 }
 
