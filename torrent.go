@@ -1514,9 +1514,46 @@ func (t *Torrent) updateAllPiecePriorities(reason updateRequestReason) {
 // updatePiecePriority, but across all pieces.
 func (t *Torrent) updatePiecePriorities(begin, end pieceIndex, reason updateRequestReason) {
 	t.logger.Slogger().Debug("updating piece priorities", "begin", begin, "end", end)
+	
+	// Track pieces that need peer request updates
+	var piecesNeedingPeerUpdates []pieceIndex
+	
+	// First pass: update all piece priorities without triggering peer updates
 	for i := begin; i < end; i++ {
-		t.updatePiecePriority(i, reason)
+		t.logger.Slogger().Debug("updatePiecePriority", "piece", i, "reason", reason)
+		if t.updatePiecePriorityNoRequests(i) && !t.disableTriggers {
+			piecesNeedingPeerUpdates = append(piecesNeedingPeerUpdates, i)
+		}
 	}
+	
+	// Second pass: batch peer updates - only call updateRequests once per peer
+	// This is safe because multiple updateRequests() calls to the same peer don't accumulate;
+	// only the first call matters until needRequestUpdate is cleared.
+	if len(piecesNeedingPeerUpdates) > 0 {
+		t.iterPeers(func(c *Peer) {
+			// Check if this peer qualifies for updates with any pending piece
+			if !c.isLowOnRequests() {
+				return
+			}
+			
+			// Check if peer has any pieces in the updated range that are pending
+			for _, piece := range piecesNeedingPeerUpdates {
+				if !t._pendingPieces.Contains(uint32(piece)) {
+					continue
+				}
+				if !c.peerHasPiece(piece) {
+					continue
+				}
+				if c.requestState.Interested && c.peerChoking && !c.peerAllowedFast.Contains(piece) {
+					continue
+				}
+				// Found qualifying piece - update this peer once and move to next peer
+				c.updateRequests(reason)
+				return
+			}
+		})
+	}
+	
 	t.logPieceRequestOrder()
 }
 
