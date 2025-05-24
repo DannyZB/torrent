@@ -251,13 +251,6 @@ func (t *Torrent) Closed() events.Done {
 // KnownSwarm returns the known subset of the peers in the Torrent's swarm, including active,
 // pending, and half-open peers.
 func (t *Torrent) KnownSwarm() (ks []PeerInfo) {
-	// Pre-allocate with estimated capacity to reduce allocations
-	estimatedPeers := t.peers.Len() + len(t.conns)
-	for _, attempts := range t.halfOpen {
-		estimatedPeers += len(attempts)
-	}
-	ks = make([]PeerInfo, 0, estimatedPeers)
-
 	// Add pending peers to the list
 	t.peers.Each(func(peer PeerInfo) {
 		ks = append(ks, peer)
@@ -756,8 +749,7 @@ func (t *Torrent) pieceAvailabilityRuns() (ret []pieceAvailabilityRun) {
 }
 
 func (t *Torrent) pieceAvailabilityFrequencies() (freqs []int) {
-	// Pre-allocate with exact size needed (max peers + 1 for zero availability)
-	freqs = make([]int, t.numActivePeers()+1)
+	freqs = make([]int, len(t.conns)+len(t.webSeeds)+1)
 	for i := range t.pieces {
 		freqs[t.piece(i).availability()]++
 	}
