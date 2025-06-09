@@ -106,9 +106,10 @@ func (ws *webseedPeer) requestIteratorLocked(requesterIndex int, x RequestIndex)
 	}()
 	delete(ws.activeRequests, r)
 	if err != nil {
-		level := log.Warning
+		//level := log.Warning
 		if errors.Is(err, context.Canceled) {
-			level = log.Debug
+			level := log.Debug
+			ws.peer.logger.Levelf(level, "requester %v: error doing webseed request %v: %v", requesterIndex, r, err)
 		}
 		//ws.peer.logger.Levelf(level, "requester %v: error doing webseed request %v: %v", requesterIndex, r, err)
 		// This used to occur only on webseed.ErrTooFast but I think it makes sense to slow down any
