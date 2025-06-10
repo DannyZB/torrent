@@ -32,7 +32,7 @@ func (pc *PeerConn) initMessageWriter() {
 			return pc.useful()
 		},
 		writeBuffer: new(peerConnMsgWriterBuffer),
-		minFillGap:  10 * time.Millisecond, // Coalesce writes within 10ms
+		minFillGap:  16 * time.Millisecond, // Coalesce writes within 16ms
 	}
 }
 
@@ -72,7 +72,7 @@ type peerConnMsgWriter struct {
 	totalBytesWritten     int64
 	totalDataBytesWritten int64
 	dataUploadRate        float64
-	
+
 	// Write coalescing to reduce lock frequency
 	lastBufferFill time.Time
 	minFillGap     time.Duration
@@ -106,15 +106,17 @@ func (cn *peerConnMsgWriter) run(keepAliveTimeout time.Duration) {
 		cn.mu.Lock()
 		// Only calculate keepAlive if buffer is empty and we might need one
 		var needKeepAlive bool
-		if cn.writeBuffer.Len() == 0 && time.Since(lastWrite) >= keepAliveTimeout {
+		bufferEmpty := cn.writeBuffer.Len() == 0
+		if bufferEmpty && time.Since(lastWrite) >= keepAliveTimeout {
 			needKeepAlive = cn.keepAlive()
 		}
 
-		if cn.writeBuffer.Len() == 0 && needKeepAlive {
+		if bufferEmpty && needKeepAlive {
 			cn.writeBuffer.Write(pp.Message{Keepalive: true}.MustMarshalBinary())
 			torrent.Add("written keepalives", 1)
+			bufferEmpty = false
 		}
-		if cn.writeBuffer.Len() == 0 {
+		if bufferEmpty {
 			writeCond := cn.writeCond.Signaled()
 			cn.mu.Unlock()
 			select {
