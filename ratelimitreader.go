@@ -47,7 +47,10 @@ func (me *rateLimitedReader) Read(b []byte) (n int, err error) {
 			panic(n)
 		}
 		me.lastRead = now
-		time.Sleep(r.Delay())
+		// Only sleep if there's actually a delay to avoid unnecessary goroutine scheduling
+		if delay := r.Delay(); delay > 0 {
+			time.Sleep(delay)
+		}
 	}
 	return
 }

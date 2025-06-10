@@ -84,10 +84,24 @@ func (cn *peerConnMsgWriter) run(keepAliveTimeout time.Duration) {
 		if cn.closed.IsSet() {
 			return
 		}
-		cn.fillWriteBuffer()
-		keepAlive := cn.keepAlive()
+
+		// Only call fillWriteBuffer if we have space and might need more data
 		cn.mu.Lock()
-		if cn.writeBuffer.Len() == 0 && time.Since(lastWrite) >= keepAliveTimeout && keepAlive {
+		bufferHasSpace := cn.writeBuffer.Len() < writeBufferHighWaterLen
+		cn.mu.Unlock()
+
+		if bufferHasSpace {
+			cn.fillWriteBuffer()
+		}
+
+		cn.mu.Lock()
+		// Only calculate keepAlive if buffer is empty and we might need one
+		var needKeepAlive bool
+		if cn.writeBuffer.Len() == 0 && time.Since(lastWrite) >= keepAliveTimeout {
+			needKeepAlive = cn.keepAlive()
+		}
+
+		if cn.writeBuffer.Len() == 0 && needKeepAlive {
 			cn.writeBuffer.Write(pp.Message{Keepalive: true}.MustMarshalBinary())
 			torrent.Add("written keepalives", 1)
 		}
@@ -110,18 +124,21 @@ func (cn *peerConnMsgWriter) run(keepAliveTimeout time.Duration) {
 		var err error
 		startedWriting := time.Now()
 		startingBufLen := frontBuf.Len()
-		for frontBuf.Len() != 0 {
-			next := frontBuf.Bytes()
-			var n int
-			n, err = cn.w.Write(next)
-			frontBuf.Next(n)
-			if err == nil && n != len(next) {
-				panic("expected full write")
+
+		// Optimized write loop - write larger chunks when possible
+		buf := frontBuf.Bytes()
+		for len(buf) > 0 {
+			n, writeErr := cn.w.Write(buf)
+			if n > 0 {
+				buf = buf[n:]
+				frontBuf.Next(n)
 			}
-			if err != nil {
+			if writeErr != nil {
+				err = writeErr
 				break
 			}
 		}
+
 		if err != nil {
 			cn.logger.WithDefaultLevel(log.Debug).Printf("error writing: %v", err)
 			return
@@ -129,7 +146,9 @@ func (cn *peerConnMsgWriter) run(keepAliveTimeout time.Duration) {
 		// Track what was sent and how long it took.
 		writeDuration := time.Since(startedWriting)
 		cn.mu.Lock()
-		cn.dataUploadRate = float64(frontBuf.pieceDataBytes) / writeDuration.Seconds()
+		if writeDuration.Seconds() > 0 {
+			cn.dataUploadRate = float64(frontBuf.pieceDataBytes) / writeDuration.Seconds()
+		}
 		cn.totalWriteDuration += writeDuration
 		cn.totalBytesWritten += int64(startingBufLen)
 		cn.totalDataBytesWritten += int64(frontBuf.pieceDataBytes)
