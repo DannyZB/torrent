@@ -67,6 +67,11 @@ type Torrent struct {
 	cl     *Client
 	logger log.Logger
 
+	// Stats cache to reduce lock contention
+	statsCacheMu    sync.RWMutex
+	statsCache      TorrentStats
+	statsCacheTime  time.Time
+
 	networkingEnabled      chansync.Flag
 	dataDownloadDisallowed chansync.Flag
 	dataUploadDisallowed   bool
@@ -2306,6 +2311,34 @@ func (t *Torrent) Stats() TorrentStats {
 	t.cl.rLock()
 	defer t.cl.rUnlock()
 	return t.statsLocked()
+}
+
+// CachedStats returns stats with a 100ms cache to reduce lock contention.
+// This is ideal for frequent stats polling scenarios.
+func (t *Torrent) CachedStats() TorrentStats {
+	const cacheDuration = 100 * time.Millisecond
+	
+	// Try to use cached stats
+	t.statsCacheMu.RLock()
+	if !t.statsCacheTime.IsZero() && time.Since(t.statsCacheTime) < cacheDuration {
+		stats := t.statsCache
+		t.statsCacheMu.RUnlock()
+		return stats
+	}
+	t.statsCacheMu.RUnlock()
+	
+	// Need fresh stats
+	t.cl.rLock()
+	stats := t.statsLocked()
+	t.cl.rUnlock()
+	
+	// Update cache
+	t.statsCacheMu.Lock()
+	t.statsCache = stats
+	t.statsCacheTime = time.Now()
+	t.statsCacheMu.Unlock()
+	
+	return stats
 }
 
 func (t *Torrent) gauges() (ret TorrentGauges) {

@@ -32,6 +32,7 @@ func (pc *PeerConn) initMessageWriter() {
 			return pc.useful()
 		},
 		writeBuffer: new(peerConnMsgWriterBuffer),
+		minFillGap:  10 * time.Millisecond, // Coalesce writes within 10ms
 	}
 }
 
@@ -71,6 +72,10 @@ type peerConnMsgWriter struct {
 	totalBytesWritten     int64
 	totalDataBytesWritten int64
 	dataUploadRate        float64
+	
+	// Write coalescing to reduce lock frequency
+	lastBufferFill time.Time
+	minFillGap     time.Duration
 }
 
 // Routine that writes to the peer. Some of what to write is buffered by
@@ -88,10 +93,14 @@ func (cn *peerConnMsgWriter) run(keepAliveTimeout time.Duration) {
 		// Only call fillWriteBuffer if we have space and might need more data
 		cn.mu.Lock()
 		bufferHasSpace := cn.writeBuffer.Len() < writeBufferHighWaterLen
+		shouldCoalesce := cn.minFillGap > 0 && time.Since(cn.lastBufferFill) < cn.minFillGap
 		cn.mu.Unlock()
 
-		if bufferHasSpace {
+		if bufferHasSpace && !shouldCoalesce {
 			cn.fillWriteBuffer()
+			cn.mu.Lock()
+			cn.lastBufferFill = time.Now()
+			cn.mu.Unlock()
 		}
 
 		cn.mu.Lock()
