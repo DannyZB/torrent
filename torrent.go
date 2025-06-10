@@ -189,6 +189,9 @@ type Torrent struct {
 
 	// Disable actions after updating piece priorities, for benchmarking.
 	disableTriggers bool
+
+	// Rate limit reader position changes to reduce lock contention
+	lastReaderPosChange time.Time
 }
 
 type torrentTrackerAnnouncerKey struct {
@@ -1419,6 +1422,12 @@ func (t *Torrent) updateReaderPieces() {
 }
 
 func (t *Torrent) readerPosChanged(from, to pieceRange) {
+	// Skip if called too frequently - only update every 0.5 seconds
+	if time.Since(t.lastReaderPosChange) < 500*time.Millisecond {
+		return
+	}
+	t.lastReaderPosChange = time.Now()
+	
 	if from == to {
 		return
 	}
