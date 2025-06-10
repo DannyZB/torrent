@@ -133,7 +133,7 @@ func Handshake(
 ) {
 	sock = ctxrw.WrapReadWriter(ctx, sock)
 	// Bytes to be sent to the peer. Should never block the sender.
-	postCh := make(chan []byte, 4)
+	postCh := make(chan []byte, 8) // doubled from 4 to reduce handshake blocking
 	// A single error value sent when the writer completes.
 	writeDone := make(chan error, 1)
 	// Performs writes to the socket and ensures posts don't block.

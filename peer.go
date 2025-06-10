@@ -378,7 +378,7 @@ func (cn *Peer) peerHasPiece(piece pieceIndex) bool {
 // 64KiB, but temporarily less to work around an issue with WebRTC. TODO: Update when
 // https://github.com/pion/datachannel/issues/59 is fixed.
 const (
-	writeBufferHighWaterLen = 1 << 18
+	writeBufferHighWaterLen = 1 << 17 // 128KiB - double the original 64KiB
 	writeBufferLowWaterLen  = writeBufferHighWaterLen / 2
 )
 
