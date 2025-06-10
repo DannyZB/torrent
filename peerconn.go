@@ -751,19 +751,19 @@ func (c *PeerConn) mainReadLoop() (err error) {
 		MaxLength: 4 * pp.Integer(max(int64(t.chunkSize), defaultChunkSize)),
 		Pool:      &t.chunkPool,
 	}
-	
+
 	var messageCount int32
 	var lastUnlock time.Time
-	
+
 	for {
 		var msg pp.Message
 		func() {
 			// Check if we can avoid unlock/lock entirely or should batch messages
-			buffered := decoder.R.(*bufio.Reader).Buffered() > 0
-			shouldUnlock := !buffered || 
-			               messageCount%8 == 0 || 
-			               time.Since(lastUnlock) > 10*time.Millisecond
-			
+			buffered := decoder.R.Buffered() > 0
+			shouldUnlock := !buffered ||
+				messageCount%4 == 0 ||
+				time.Since(lastUnlock) > 5*time.Millisecond
+
 			if shouldUnlock {
 				cl.unlock()
 				defer cl.lock()
