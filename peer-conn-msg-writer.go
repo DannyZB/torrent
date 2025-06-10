@@ -32,7 +32,7 @@ func (pc *PeerConn) initMessageWriter() {
 			return pc.useful()
 		},
 		writeBuffer: new(peerConnMsgWriterBuffer),
-		minFillGap:  16 * time.Millisecond, // Coalesce writes within 16ms
+		minFillGap:  10 * time.Millisecond, // Coalesce writes within 10ms
 	}
 }
 

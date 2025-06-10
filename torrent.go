@@ -16,11 +16,11 @@ import (
 	"net/netip"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
 	"unsafe"
-	"strconv"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/anacrolix/chansync"
@@ -68,9 +68,9 @@ type Torrent struct {
 	logger log.Logger
 
 	// Stats cache to reduce lock contention
-	statsCacheMu    sync.RWMutex
-	statsCache      TorrentStats
-	statsCacheTime  time.Time
+	statsCacheMu   sync.RWMutex
+	statsCache     TorrentStats
+	statsCacheTime time.Time
 
 	networkingEnabled      chansync.Flag
 	dataDownloadDisallowed chansync.Flag
@@ -1519,17 +1519,17 @@ func (t *Torrent) updateAllPiecePriorities(reason updateRequestReason) {
 // updatePiecePriority, but across all pieces.
 func (t *Torrent) updatePiecePriorities(begin, end pieceIndex, reason updateRequestReason) {
 	t.logger.Slogger().Debug("updating piece priorities", "begin", begin, "end", end)
-	
+
 	// Track pieces that need peer request updates
 	var piecesNeedingPeerUpdates []pieceIndex
-	
+
 	// First pass: update all piece priorities without triggering peer updates
 	for i := begin; i < end; i++ {
 		if t.updatePiecePriorityNoRequests(i) && !t.disableTriggers {
 			piecesNeedingPeerUpdates = append(piecesNeedingPeerUpdates, i)
 		}
 	}
-	
+
 	// Second pass: batch peer updates - only call updateRequests once per peer
 	// This is safe because multiple updateRequests() calls to the same peer don't accumulate;
 	// only the first call matters until needRequestUpdate is cleared.
@@ -1539,7 +1539,7 @@ func (t *Torrent) updatePiecePriorities(begin, end pieceIndex, reason updateRequ
 			if !c.isLowOnRequests() {
 				return
 			}
-			
+
 			// Check if peer has any pieces in the updated range that are pending
 			for _, piece := range piecesNeedingPeerUpdates {
 				if !t._pendingPieces.Contains(uint32(piece)) {
@@ -1557,7 +1557,7 @@ func (t *Torrent) updatePiecePriorities(begin, end pieceIndex, reason updateRequ
 			}
 		})
 	}
-	
+
 	t.logPieceRequestOrder()
 }
 
@@ -2313,11 +2313,11 @@ func (t *Torrent) Stats() TorrentStats {
 	return t.statsLocked()
 }
 
-// CachedStats returns stats with a 100ms cache to reduce lock contention.
+// CachedStats returns stats with a 200ms cache to reduce lock contention.
 // This is ideal for frequent stats polling scenarios.
 func (t *Torrent) CachedStats() TorrentStats {
-	const cacheDuration = 100 * time.Millisecond
-	
+	const cacheDuration = 200 * time.Millisecond
+
 	// Try to use cached stats
 	t.statsCacheMu.RLock()
 	if !t.statsCacheTime.IsZero() && time.Since(t.statsCacheTime) < cacheDuration {
@@ -2326,18 +2326,18 @@ func (t *Torrent) CachedStats() TorrentStats {
 		return stats
 	}
 	t.statsCacheMu.RUnlock()
-	
+
 	// Need fresh stats
 	t.cl.rLock()
 	stats := t.statsLocked()
 	t.cl.rUnlock()
-	
+
 	// Update cache
 	t.statsCacheMu.Lock()
 	t.statsCache = stats
 	t.statsCacheTime = time.Now()
 	t.statsCacheMu.Unlock()
-	
+
 	return stats
 }
 
@@ -3445,21 +3445,21 @@ func (t *Torrent) eachShortInfohash(each func(short [20]byte)) {
 }
 
 func (t *Torrent) getFileByPiecesRoot(hash [32]byte) *File {
-    // t.files can be nil while the torrent is still building.
-    if t.files == nil {
-        return nil
-    }
+	// t.files can be nil while the torrent is still building.
+	if t.files == nil {
+		return nil
+	}
 
-    for _, f := range *t.files {
-        // piecesRoot is an option → make sure it is set before unwrapping.
-        if !f.piecesRoot.Ok {
-            continue
-        }
-        if f.piecesRoot.Value == hash {
-            return f
-        }
-    }
-    return nil
+	for _, f := range *t.files {
+		// piecesRoot is an option → make sure it is set before unwrapping.
+		if !f.piecesRoot.Ok {
+			continue
+		}
+		if f.piecesRoot.Value == hash {
+			return f
+		}
+	}
+	return nil
 }
 
 func (t *Torrent) pieceLayers() (pieceLayers map[string]string) {
@@ -3529,7 +3529,7 @@ func (ts TrackerStatus) ErrorType() string {
 	if ts.LastError == nil {
 		return ""
 	}
-	
+
 	errStr := ts.LastError.Error()
 	switch {
 	// HTTP status code errors (from tracker/http/http.go)
@@ -3543,7 +3543,7 @@ func (ts TrackerStatus) ErrorType() string {
 		} else {
 			return "tracker_http_error"
 		}
-	
+
 	// Tracker failure reasons (from tracker/http/http.go line 128)
 	case strings.Contains(errStr, "tracker gave failure reason"):
 		reason := errStr
@@ -3555,27 +3555,27 @@ func (ts TrackerStatus) ErrorType() string {
 		default:
 			return "tracker_failure"
 		}
-	
+
 	// DNS/Network errors (from tracker_scraper.go)
 	case strings.Contains(errStr, "error getting ip") || strings.Contains(errStr, "no ips") || strings.Contains(errStr, "no acceptable ips"):
 		return "dns_error"
 	case strings.Contains(errStr, "client is closed"):
 		return "client_closed"
-	
+
 	// Context/timeout errors
 	case strings.Contains(errStr, "context deadline exceeded") || strings.Contains(errStr, "timeout"):
 		return "timeout"
 	case strings.Contains(errStr, "context canceled"):
 		return "cancelled"
-	
+
 	// Network connectivity errors
 	case strings.Contains(errStr, "connection refused") || strings.Contains(errStr, "network is unreachable") || strings.Contains(errStr, "no route to host"):
 		return "network_error"
-	
+
 	// UDP tracker specific errors
 	case strings.Contains(errStr, "Connection ID missmatch"):
 		return "udp_connection_error"
-	
+
 	default:
 		return "unknown_error"
 	}
@@ -3585,7 +3585,7 @@ func (ts TrackerStatus) ErrorType() string {
 func (t *Torrent) TrackerStatuses() []TrackerStatus {
 	t.cl.rLock()
 	defer t.cl.rUnlock()
-	
+
 	// Pre-allocate with capacity based on number of tracker announcers
 	statuses := make([]TrackerStatus, 0, len(t.trackerAnnouncers))
 	for _, announcer := range t.trackerAnnouncers {
@@ -3598,12 +3598,12 @@ func (t *Torrent) TrackerStatuses() []TrackerStatus {
 				NumPeers:     ta.lastAnnounce.NumPeers,
 				Interval:     ta.lastAnnounce.Interval,
 			}
-			
+
 			// Calculate next announce time
 			if !ta.lastAnnounce.Completed.IsZero() && ta.lastAnnounce.Interval > 0 {
 				status.NextAnnounce = ta.lastAnnounce.Completed.Add(ta.lastAnnounce.Interval)
 			}
-			
+
 			statuses = append(statuses, status)
 		case *websocketTrackerStatus:
 			// Add support for websocket trackers if needed
@@ -3615,6 +3615,6 @@ func (t *Torrent) TrackerStatuses() []TrackerStatus {
 			statuses = append(statuses, status)
 		}
 	}
-	
+
 	return statuses
 }
