@@ -692,11 +692,23 @@ func (c *Peer) receiveChunk(msg *pp.Message) error {
 
 	piece := &t.pieces[ppReq.Index]
 
-	c.allStats(add(1, func(cs *ConnStats) *Count { return &cs.ChunksReadUseful }))
-	c.allStats(add(int64(len(msg.Piece)), func(cs *ConnStats) *Count { return &cs.BytesReadUsefulData }))
+	// Direct atomic stats updates to eliminate function call overhead
+	chunkSize := int64(len(msg.Piece))
+	c._stats.ChunksReadUseful.Add(1)
+	c._stats.BytesReadUsefulData.Add(chunkSize)
+	if c.reconciledHandshakeStats {
+		c.t.connStats.ChunksReadUseful.Add(1)
+		c.t.connStats.BytesReadUsefulData.Add(chunkSize)
+		c.t.cl.connStats.ChunksReadUseful.Add(1)
+		c.t.cl.connStats.BytesReadUsefulData.Add(chunkSize)
+	}
 	if intended {
 		c.piecesReceivedSinceLastRequestUpdate++
-		c.allStats(add(int64(len(msg.Piece)), func(cs *ConnStats) *Count { return &cs.BytesReadUsefulIntendedData }))
+		c._stats.BytesReadUsefulIntendedData.Add(chunkSize)
+		if c.reconciledHandshakeStats {
+			c.t.connStats.BytesReadUsefulIntendedData.Add(chunkSize)
+			c.t.cl.connStats.BytesReadUsefulIntendedData.Add(chunkSize)
+		}
 	}
 	for _, f := range c.t.cl.config.Callbacks.ReceivedUsefulData {
 		f(ReceivedUsefulDataEvent{c, msg})
