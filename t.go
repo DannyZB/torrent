@@ -144,18 +144,12 @@ func (t *Torrent) QuickDrop() {
 		return // Already closed
 	}
 
-	// IMMEDIATE: Close all peer connections (stops data flow)
-	var peersToClose []*Peer
+	// IMMEDIATE: Close all peer connections (must be under lock to avoid races)
 	t.iterPeers(func(p *Peer) {
-		peersToClose = append(peersToClose, p)
+		p.close() // Stops receiveChunk/writeChunk
 	})
 
 	t.cl.unlock()
-
-	// Close connections outside lock (can be slow)
-	for _, p := range peersToClose {
-		p.close() // Stops receiveChunk/writeChunk
-	}
 
 	// Aggressive cleanup can be added here - now safe because:
 	// - Torrent marked as closed (operations bail out)
@@ -192,7 +186,7 @@ func (t *Torrent) QuickDrop() {
 				}
 			}()
 		}
-		// Peers already closed above, so skip t.iterPeers(p.close())
+		// Peers already closed above
 		if t.storage != nil {
 			t.deletePieceRequestOrder()
 		}
