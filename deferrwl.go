@@ -16,11 +16,11 @@ func (me *lockWithDeferreds) Lock() {
 
 func (me *lockWithDeferreds) Unlock() {
 	unlockActions := me.unlockActions
+	me.unlockActions = nil
+	me.internal.Unlock()
 	for i := 0; i < len(unlockActions); i += 1 {
 		unlockActions[i]()
 	}
-	me.unlockActions = unlockActions[:0]
-	me.internal.Unlock()
 }
 
 func (me *lockWithDeferreds) RLock() {

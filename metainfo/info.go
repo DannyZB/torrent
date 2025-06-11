@@ -10,6 +10,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync/atomic"
 
 	"github.com/anacrolix/torrent/segments"
 )
@@ -31,6 +32,10 @@ type Info struct {
 	// BEP 52 (BitTorrent v2)
 	MetaVersion int64    `bencode:"meta version,omitempty"`
 	FileTree    FileTree `bencode:"file tree,omitempty"`
+	
+	// Cached number of pieces to avoid repeated FileTree walks
+	// Using int32 for atomic operations (0 means not cached)
+	numPiecesCache atomic.Int32
 }
 
 // The Info.Name field is "advisory". For multi-file torrents it's usually a suggested directory
@@ -136,14 +141,29 @@ func (info *Info) TotalLength() (ret int64) {
 	return
 }
 
-func (info *Info) NumPieces() (num int) {
+func (info *Info) NumPieces() int {
+	// Fast path: atomic load of cached value
+	if cached := info.numPiecesCache.Load(); cached > 0 {
+		return int(cached)
+	}
+	
+	// Slow path: calculate the number of pieces
+	var num int
 	if info.HasV2() {
 		info.FileTree.Walk(nil, func(path []string, ft *FileTree) {
 			num += int((ft.File.Length + info.PieceLength - 1) / info.PieceLength)
 		})
-		return
+	} else {
+		num = len(info.Pieces) / 20
 	}
-	return len(info.Pieces) / 20
+	
+	// Cache the result if it's non-zero using compare-and-swap
+	// This ensures only one goroutine sets the cache
+	if num > 0 {
+		info.numPiecesCache.CompareAndSwap(0, int32(num))
+	}
+	
+	return num
 }
 
 // Whether all files share the same top-level directory name. If they don't, Info.Name is usually used.

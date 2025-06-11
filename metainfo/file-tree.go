@@ -134,12 +134,19 @@ func (ft *FileTree) upvertedFilesInner(
 }
 
 func (ft *FileTree) Walk(path []string, f func(path []string, ft *FileTree)) {
+	ft.walkWithDepth(path, f, 0)
+}
+
+func (ft *FileTree) walkWithDepth(path []string, f func(path []string, ft *FileTree), depth int) {
+	if depth > 10000 { // Prevent infinite recursion from malformed file trees
+		return
+	}
 	f(path, ft)
 	for key, sub := range ft.Dir {
 		if key == FileTreePropertiesKey {
 			continue
 		}
-		sub.Walk(append(path, key), f)
+		sub.walkWithDepth(append(path, key), f, depth+1)
 	}
 }
 
