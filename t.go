@@ -131,6 +131,40 @@ func (t *Torrent) Drop() {
 	}
 }
 
+// QuickDrop immediately makes the torrent functionally inactive and closes
+// peer connections, then performs cleanup asynchronously. This returns quickly
+// while ensuring no data corruption or contamination occurs.
+func (t *Torrent) QuickDrop() {
+	t.cl.lock()
+	
+	// IMMEDIATE: Mark as closed (makes torrent functionally inactive)
+	if !t.closed.Set() {
+		t.cl.unlock()
+		return // Already closed
+	}
+	
+	// IMMEDIATE: Close all peer connections (stops data flow)
+	var peersToClose []*Peer
+	t.iterPeers(func(p *Peer) {
+		peersToClose = append(peersToClose, p)
+	})
+	
+	t.cl.unlock()
+	
+	// Close connections outside lock (can be slow)
+	for _, p := range peersToClose {
+		p.close() // Stops receiveChunk/writeChunk
+	}
+	
+	// Aggressive cleanup can be added here - now safe because:
+	// - Torrent marked as closed (operations bail out)
+	// - Peer connections closed (no data flow)
+	// - Still in hash maps (no panic risk)
+	
+	// Standard Drop for final cleanup (handles hash maps safely)
+	go t.Drop() // Will be fast since connections already closed and marked closed
+}
+
 // Number of bytes of the entire torrent we have completed. This is the sum of
 // completed pieces, and dirtied chunks of incomplete pieces. Do not use this
 // for download rate, as it can go down when pieces are lost or fail checks.
