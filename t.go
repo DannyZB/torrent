@@ -161,18 +161,46 @@ func (t *Torrent) QuickDrop() {
 	// - Peer connections closed (no data flow)
 	// - Still in hash maps (no panic risk)
 	
-	// Manual cleanup (replicates Drop() without double-closing)
+	// Manual cleanup (replicates dropTorrent() without calling t.close())
 	go func() {
 		var wg sync.WaitGroup
+		
+		// Remove from hash maps (same as dropTorrent)
 		t.cl.lock()
-		err := t.cl.dropTorrent(t, &wg)
+		t.eachShortInfohash(func(short [20]byte) {
+			delete(t.cl.torrentsByShortHash, short)
+		})
+		delete(t.cl.torrents, t)
 		t.cl.unlock()
-		if err != nil {
-			// Don't panic on "already closed" error since we set it earlier
-			if err.Error() != "already closed" {
-				panic(err)
-			}
+		
+		// Do t.close() operations manually (without setting closed flag again)
+		for _, f := range t.onClose {
+			f()
 		}
+		if t.storage != nil {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				t.storageLock.Lock()
+				defer t.storageLock.Unlock()
+				if f := t.storage.Close; f != nil {
+					err1 := f()
+					if err1 != nil {
+						t.logger.WithDefaultLevel(log.Warning).Printf("error closing storage: %v", err1)
+					}
+				}
+			}()
+		}
+		// Peers already closed above, so skip t.iterPeers(p.close())
+		if t.storage != nil {
+			t.deletePieceRequestOrder()
+		}
+		t.assertAllPiecesRelativeAvailabilityZero()
+		t.pex.Reset()
+		t.cl.event.Broadcast()
+		t.pieceStateChanges.Close()
+		t.updateWantPeersEvent()
+		
 		wg.Wait()
 	}()
 }
