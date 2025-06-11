@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/anacrolix/chansync/events"
+	"github.com/anacrolix/log"
 	"github.com/anacrolix/missinggo/v2/pubsub"
 	"github.com/anacrolix/sync"
 
@@ -68,7 +69,7 @@ func (t *Torrent) newPassiveReader(offset, length int64) Reader {
 		passive: true,
 	}
 	r.readaheadFunc = defaultReadaheadFunc // Safe - just calculates readahead amount
-	t.addReader(&r) // Still register for proper cleanup
+	t.addReader(&r)                        // Still register for proper cleanup
 	return &r
 }
 
@@ -136,35 +137,35 @@ func (t *Torrent) Drop() {
 // while ensuring no data corruption or contamination occurs.
 func (t *Torrent) QuickDrop() {
 	t.cl.lock()
-	
+
 	// IMMEDIATE: Mark as closed (makes torrent functionally inactive)
 	if !t.closed.Set() {
 		t.cl.unlock()
 		return // Already closed
 	}
-	
+
 	// IMMEDIATE: Close all peer connections (stops data flow)
 	var peersToClose []*Peer
 	t.iterPeers(func(p *Peer) {
 		peersToClose = append(peersToClose, p)
 	})
-	
+
 	t.cl.unlock()
-	
+
 	// Close connections outside lock (can be slow)
 	for _, p := range peersToClose {
 		p.close() // Stops receiveChunk/writeChunk
 	}
-	
+
 	// Aggressive cleanup can be added here - now safe because:
 	// - Torrent marked as closed (operations bail out)
 	// - Peer connections closed (no data flow)
 	// - Still in hash maps (no panic risk)
-	
+
 	// Manual cleanup (replicates dropTorrent() without calling t.close())
 	go func() {
 		var wg sync.WaitGroup
-		
+
 		// Remove from hash maps (same as dropTorrent)
 		t.cl.lock()
 		t.eachShortInfohash(func(short [20]byte) {
@@ -172,7 +173,7 @@ func (t *Torrent) QuickDrop() {
 		})
 		delete(t.cl.torrents, t)
 		t.cl.unlock()
-		
+
 		// Do t.close() operations manually (without setting closed flag again)
 		for _, f := range t.onClose {
 			f()
@@ -200,7 +201,7 @@ func (t *Torrent) QuickDrop() {
 		t.cl.event.Broadcast()
 		t.pieceStateChanges.Close()
 		t.updateWantPeersEvent()
-		
+
 		wg.Wait()
 	}()
 }
