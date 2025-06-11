@@ -1686,6 +1686,14 @@ func (t *Torrent) maxHalfOpen() int {
 }
 
 func (t *Torrent) openNewConns() (initiated int) {
+	// Early exit if no peers to connect to
+	if t.peers.Len() == 0 {
+		return
+	}
+	// Early exit for inactive torrents to reduce lock contention
+	if !t.needData() && !t.seeding() {
+		return
+	}
 	defer t.updateWantPeersEvent()
 	for t.peers.Len() != 0 {
 		if !t.wantOutgoingConns() {
