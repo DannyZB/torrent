@@ -752,6 +752,7 @@ func (c *PeerConn) mainReadLoop() (err error) {
 		Pool:      &t.chunkPool,
 	}
 
+	messageStartTime := time.Now()
 	for {
 		var msg pp.Message
 		func() {
@@ -773,7 +774,7 @@ func (c *PeerConn) mainReadLoop() (err error) {
 			err = log.WithLevel(log.Info, err)
 			return err
 		}
-		c.lastMessageReceived = time.Now()
+		c.lastMessageReceived = messageStartTime
 		if msg.Keepalive {
 			receivedKeepalives.Add(1)
 			continue
@@ -849,7 +850,7 @@ func (c *PeerConn) mainReadLoop() (err error) {
 			}
 		case pp.Piece:
 			c.doChunkReadStats(int64(len(msg.Piece)))
-			err = c.receiveChunk(&msg)
+			err = c.receiveChunk(&msg, messageStartTime)
 			if len(msg.Piece) == int(t.chunkSize) {
 				t.chunkPool.Put(&msg.Piece)
 			}

@@ -622,7 +622,7 @@ func (c *Peer) doChunkReadStats(size int64) {
 }
 
 // Handle a received chunk from a peer.
-func (c *Peer) receiveChunk(msg *pp.Message) error {
+func (c *Peer) receiveChunk(msg *pp.Message, msgTime time.Time) error {
 	ChunksReceived.Add("total", 1)
 
 	ppReq := newRequestFromMessage(msg)
@@ -713,7 +713,7 @@ func (c *Peer) receiveChunk(msg *pp.Message) error {
 	for _, f := range c.t.cl.config.Callbacks.ReceivedUsefulData {
 		f(ReceivedUsefulDataEvent{c, msg})
 	}
-	c.lastUsefulChunkReceived = time.Now()
+	c.lastUsefulChunkReceived = msgTime
 
 	// Need to record that it hasn't been written yet, before we attempt to do
 	// anything with it.
