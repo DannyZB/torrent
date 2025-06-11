@@ -161,8 +161,20 @@ func (t *Torrent) QuickDrop() {
 	// - Peer connections closed (no data flow)
 	// - Still in hash maps (no panic risk)
 	
-	// Standard Drop for final cleanup (handles hash maps safely)
-	go t.Drop() // Will be fast since connections already closed and marked closed
+	// Manual cleanup (replicates Drop() without double-closing)
+	go func() {
+		var wg sync.WaitGroup
+		t.cl.lock()
+		err := t.cl.dropTorrent(t, &wg)
+		t.cl.unlock()
+		if err != nil {
+			// Don't panic on "already closed" error since we set it earlier
+			if err.Error() != "already closed" {
+				panic(err)
+			}
+		}
+		wg.Wait()
+	}()
 }
 
 // Number of bytes of the entire torrent we have completed. This is the sum of
