@@ -222,7 +222,7 @@ func (ws *webseedPeer) requestResultHandler(r Request, webseedRequest webseed.Re
 		Index: r.Index,
 		Begin: r.Begin,
 		Piece: result.Bytes,
-	})
+	}, time.Now())
 	if err != nil {
 		ws.peer.logger.Printf("error receiving chunk for request %v: %v", r, err)
 		return err
