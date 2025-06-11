@@ -79,6 +79,9 @@ type reader struct {
 	// after a seek or with a new reader at the starting position.
 	reading    bool
 	responsive bool
+	
+	// If true, this reader doesn't trigger piece priority updates for performance
+	passive bool
 }
 
 func (r *reader) SetContext(ctx context.Context) {
@@ -342,6 +345,9 @@ func (r *reader) Close() error {
 }
 
 func (r *reader) posChanged() {
+	if r.passive {
+		return // Skip piece priority updates for passive readers
+	}
 	to := r.piecesUncached()
 	from := r.pieces
 	if to == from {

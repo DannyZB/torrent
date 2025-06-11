@@ -38,6 +38,13 @@ func (t *Torrent) NewReader() Reader {
 	return t.newReader(0, t.length())
 }
 
+// NewPassiveReader creates a reader that doesn't trigger piece priority updates
+// or other performance-impacting operations. Use for reading already downloaded
+// data without affecting download strategy.
+func (t *Torrent) NewPassiveReader() Reader {
+	return t.newPassiveReader(0, t.length())
+}
+
 func (t *Torrent) newReader(offset, length int64) Reader {
 	r := reader{
 		mu:     t.cl.locker(),
@@ -48,6 +55,20 @@ func (t *Torrent) newReader(offset, length int64) Reader {
 	}
 	r.readaheadFunc = defaultReadaheadFunc
 	t.addReader(&r)
+	return &r
+}
+
+func (t *Torrent) newPassiveReader(offset, length int64) Reader {
+	r := reader{
+		mu:      t.cl.locker(),
+		t:       t,
+		offset:  offset,
+		length:  length,
+		ctx:     context.Background(),
+		passive: true,
+	}
+	r.readaheadFunc = defaultReadaheadFunc // Safe - just calculates readahead amount
+	t.addReader(&r) // Still register for proper cleanup
 	return &r
 }
 
