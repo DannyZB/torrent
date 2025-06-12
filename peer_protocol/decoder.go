@@ -204,10 +204,20 @@ func readSeq(r io.Reader, data ...any) (err error) {
 }
 
 func unmarshalBitfield(b []byte) (bf []bool) {
+	// Pre-allocate exact size to avoid repeated append() allocations while holding locks
+	bf = make([]bool, len(b)*8)
+	idx := 0
 	for _, c := range b {
-		for i := 7; i >= 0; i-- {
-			bf = append(bf, (c>>uint(i))&1 == 1)
-		}
+		// Extract each bit in the byte (MSB first)
+		bf[idx] = (c>>7)&1 == 1
+		bf[idx+1] = (c>>6)&1 == 1
+		bf[idx+2] = (c>>5)&1 == 1
+		bf[idx+3] = (c>>4)&1 == 1
+		bf[idx+4] = (c>>3)&1 == 1
+		bf[idx+5] = (c>>2)&1 == 1
+		bf[idx+6] = (c>>1)&1 == 1
+		bf[idx+7] = c&1 == 1
+		idx += 8
 	}
 	return
 }
