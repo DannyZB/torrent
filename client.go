@@ -242,6 +242,10 @@ func NewClient(cfg *ClientConfig) (cl *Client, err error) {
 		cfg.ListenPort = 0
 	}
 	cfg.setRateLimiterBursts()
+	
+	// Set global debug metrics flag for performance in hot paths
+	debugMetricsEnabled = cfg.Debug
+	
 	cl = &Client{}
 	cl.init(cfg)
 	go cl.acceptLimitClearer()

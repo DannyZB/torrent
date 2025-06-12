@@ -28,6 +28,10 @@ func init() {
 	torrent.Set("chunks received", &ChunksReceived)
 }
 
+// Global debug metrics flag - set once at client creation for performance
+// Avoids expensive pointer dereferences in hot paths
+var debugMetricsEnabled bool
+
 // I could move a lot of these counters to their own file, but I suspect they
 // may be attached to a Client someday.
 var (

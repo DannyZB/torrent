@@ -160,10 +160,9 @@ func (info *Info) TotalLength() int64 {
 }
 
 func (info *Info) NumPieces() int {
-	// Fast path: atomic load of cached value
-	// We cache (actual_pieces + 1) so 0 means uncached, 1 means 0 pieces, etc.
+	// Fast path: atomic load of cached value (only cache positive values)
 	if cached := info.numPiecesCache.Load(); cached > 0 {
-		return int(cached - 1)
+		return int(cached)
 	}
 	
 	// Slow path: calculate the number of pieces
@@ -176,9 +175,10 @@ func (info *Info) NumPieces() int {
 		num = len(info.Pieces) / 20
 	}
 	
-	// Cache the result (store num + 1 so we can distinguish cached 0 from uncached)
-	// This ensures only one goroutine sets the cache
-	info.numPiecesCache.CompareAndSwap(0, int32(num+1))
+	// Cache the result only if positive (safer - let 0 recalculate)
+	if num > 0 {
+		info.numPiecesCache.CompareAndSwap(0, int32(num))
+	}
 	
 	return num
 }

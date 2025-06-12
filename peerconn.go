@@ -230,7 +230,9 @@ func (cn *PeerConn) onClose() {
 // Writes a message into the write buffer. Returns whether it's okay to keep writing. Writing is
 // done asynchronously, so it may be that we're not able to honour backpressure from this method.
 func (cn *PeerConn) write(msg pp.Message) bool {
-	torrent.Add(fmt.Sprintf("messages written of type %s", msg.Type.String()), 1)
+	if debugMetricsEnabled {
+		torrent.Add(fmt.Sprintf("messages written of type %s", msg.Type.String()), 1)
+	}
 	// We don't need to track bytes here because the connection's Writer has that behaviour injected
 	// (although there's some delay between us buffering the message, and the connection writer
 	// flushing it out.).
@@ -543,13 +545,15 @@ func (c *PeerConn) requestPendingMetadata() {
 }
 
 func (cn *PeerConn) wroteMsg(msg *pp.Message) {
-	torrent.Add(fmt.Sprintf("messages written of type %s", msg.Type.String()), 1)
-	if msg.Type == pp.Extended {
-		for name, id := range cn.PeerExtensionIDs {
-			if id != msg.ExtendedID {
-				continue
+	if debugMetricsEnabled {
+		torrent.Add(fmt.Sprintf("messages written of type %s", msg.Type.String()), 1)
+		if msg.Type == pp.Extended {
+			for name, id := range cn.PeerExtensionIDs {
+				if id != msg.ExtendedID {
+					continue
+				}
+				torrent.Add(fmt.Sprintf("Extended messages written for protocol %q", name), 1)
 			}
-			torrent.Add(fmt.Sprintf("Extended messages written for protocol %q", name), 1)
 		}
 	}
 	cn.allStats(func(cs *ConnStats) { cs.wroteMsg(msg) })
@@ -585,25 +589,35 @@ func (c *PeerConn) maximumPeerRequestChunkLength() (_ Option[int]) {
 
 // startFetch is for testing purposes currently.
 func (c *PeerConn) onReadRequest(r Request, startFetch bool) error {
-	requestedChunkLengths.Add(strconv.FormatUint(r.Length.Uint64(), 10), 1)
+	if debugMetricsEnabled {
+		requestedChunkLengths.Add(strconv.FormatUint(r.Length.Uint64(), 10), 1)
+	}
 	if _, ok := c.peerRequests[r]; ok {
-		torrent.Add("duplicate requests received", 1)
+		if debugMetricsEnabled {
+			torrent.Add("duplicate requests received", 1)
+		}
 		if c.fastEnabled() {
 			return errors.New("received duplicate request with fast enabled")
 		}
 		return nil
 	}
 	if c.choking {
-		torrent.Add("requests received while choking", 1)
+		if debugMetricsEnabled {
+			torrent.Add("requests received while choking", 1)
+		}
 		if c.fastEnabled() {
-			torrent.Add("requests rejected while choking", 1)
+			if debugMetricsEnabled {
+				torrent.Add("requests rejected while choking", 1)
+			}
 			c.reject(r)
 		}
 		return nil
 	}
 	// TODO: What if they've already requested this?
 	if len(c.peerRequests) >= localClientReqq {
-		torrent.Add("requests received while queue full", 1)
+		if debugMetricsEnabled {
+			torrent.Add("requests received while queue full", 1)
+		}
 		if c.fastEnabled() {
 			c.reject(r)
 		}
@@ -628,7 +642,9 @@ func (c *PeerConn) onReadRequest(r Request, startFetch bool) error {
 	pieceLength := c.t.pieceLength(pieceIndex(r.Index))
 	// Check this after we know we have the piece, so that the piece length will be known.
 	if chunkOverflowsPiece(r.ChunkSpec, pieceLength) {
-		torrent.Add("bad requests received", 1)
+		if debugMetricsEnabled {
+			torrent.Add("bad requests received", 1)
+		}
 		return errors.New("chunk overflows piece")
 	}
 	if c.peerRequests == nil {
