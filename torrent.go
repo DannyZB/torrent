@@ -34,7 +34,6 @@ import (
 	"github.com/anacrolix/missinggo/v2/bitmap"
 	"github.com/anacrolix/missinggo/v2/pubsub"
 	"github.com/anacrolix/multiless"
-	"github.com/anacrolix/sync"
 	"github.com/pion/webrtc/v4"
 	"golang.org/x/sync/errgroup"
 
@@ -1110,7 +1109,7 @@ var bitfieldPool = sync.Pool{
 
 func (t *Torrent) bitfield() (bf []bool) {
 	numPieces := t.numPieces()
-	
+
 	// Get slice from pool and resize to needed capacity
 	bf = bitfieldPool.Get().([]bool)
 	if cap(bf) < numPieces {
@@ -1122,7 +1121,7 @@ func (t *Torrent) bitfield() (bf []bool) {
 			bf[i] = false
 		}
 	}
-	
+
 	// Set completed pieces
 	t._completedPieces.Iterate(func(piece uint32) (again bool) {
 		if int(piece) < len(bf) { // Bounds check for safety
@@ -1130,7 +1129,7 @@ func (t *Torrent) bitfield() (bf []bool) {
 		}
 		return true
 	})
-	
+
 	return
 }
 
@@ -1453,7 +1452,7 @@ func (t *Torrent) readerPosChanged(from, to pieceRange) {
 		return
 	}
 	t.lastReaderPosChange = time.Now()
-	
+
 	if from == to {
 		return
 	}
