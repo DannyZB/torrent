@@ -36,6 +36,10 @@ type Info struct {
 	// Cached number of pieces to avoid repeated FileTree walks
 	// Using int32 for atomic operations (0 means not cached)
 	numPiecesCache atomic.Int32
+	
+	// Cached total length to avoid repeated UpvertedFiles() calls
+	// Using int64 for atomic operations (0 means not cached)
+	totalLengthCache atomic.Int64
 }
 
 // The Info.Name field is "advisory". For multi-file torrents it's usually a suggested directory
@@ -134,11 +138,25 @@ func (info *Info) GeneratePieces(open func(fi FileInfo) (io.ReadCloser, error)) 
 	return
 }
 
-func (info *Info) TotalLength() (ret int64) {
+func (info *Info) TotalLength() int64 {
+	// Fast path: atomic load of cached value
+	if cached := info.totalLengthCache.Load(); cached > 0 {
+		return cached
+	}
+	
+	// Slow path: calculate the total length
+	var ret int64
 	for _, fi := range info.UpvertedFiles() {
 		ret += fi.Length
 	}
-	return
+	
+	// Cache the result if it's non-zero using compare-and-swap
+	// This ensures only one goroutine sets the cache
+	if ret > 0 {
+		info.totalLengthCache.CompareAndSwap(0, ret)
+	}
+	
+	return ret
 }
 
 func (info *Info) NumPieces() int {

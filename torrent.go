@@ -2797,7 +2797,11 @@ func (t *Torrent) pieceHasher(index pieceIndex) {
 // Return the connections that touched a piece, and clear the entries while doing it.
 func (t *Torrent) clearPieceTouchers(pi pieceIndex) {
 	p := t.piece(pi)
+	var dirtiers []*Peer
 	for c := range p.dirtiers {
+		dirtiers = append(dirtiers, c)
+	}
+	for _, c := range dirtiers {
 		delete(c.peerTouchedPieces, pi)
 		delete(p.dirtiers, c)
 	}
