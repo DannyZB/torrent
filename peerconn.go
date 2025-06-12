@@ -795,12 +795,20 @@ func (c *PeerConn) mainReadLoop() (err error) {
 		}
 		c.lastMessageReceived = messageStartTime
 		if msg.Keepalive {
-			receivedKeepalives.Add(1)
+			if debugMetricsEnabled {
+				receivedKeepalives.Add(1)
+			}
 			continue
 		}
-		messageTypesReceived.Add(msg.Type.String(), 1)
+		if debugMetricsEnabled {
+			messageTypesReceived.Add(msg.Type.String(), 1)
+		}
 		if msg.Type.FastExtension() && !c.fastEnabled() {
-			runSafeExtraneous(func() { torrent.Add("fast messages received when extension is disabled", 1) })
+			runSafeExtraneous(func() { 
+				if debugMetricsEnabled {
+					torrent.Add("fast messages received when extension is disabled", 1)
+				}
+			})
 			return fmt.Errorf("received fast extension message (type=%v) but extension is disabled", msg.Type)
 		}
 		switch msg.Type {

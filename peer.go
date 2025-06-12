@@ -623,7 +623,9 @@ func (c *Peer) doChunkReadStats(size int64) {
 
 // Handle a received chunk from a peer.
 func (c *Peer) receiveChunk(msg *pp.Message, msgTime time.Time) error {
-	ChunksReceived.Add("total", 1)
+	if debugMetricsEnabled {
+		ChunksReceived.Add("total", 1)
+	}
 
 	ppReq := newRequestFromMessage(msg)
 	t := c.t
@@ -643,17 +645,23 @@ func (c *Peer) receiveChunk(msg *pp.Message, msgTime time.Time) error {
 	defer recordBlockForSmartBan()
 
 	if c.peerChoking {
-		ChunksReceived.Add("while choked", 1)
+		if debugMetricsEnabled {
+			ChunksReceived.Add("while choked", 1)
+		}
 	}
 
 	if c.validReceiveChunks[req] <= 0 {
-		ChunksReceived.Add("unexpected", 1)
+		if debugMetricsEnabled {
+			ChunksReceived.Add("unexpected", 1)
+		}
 		return errors.New("received unexpected chunk")
 	}
 	c.decExpectedChunkReceive(req)
 
 	if c.peerChoking && c.peerAllowedFast.Contains(pieceIndex(ppReq.Index)) {
-		ChunksReceived.Add("due to allowed fast", 1)
+		if debugMetricsEnabled {
+			ChunksReceived.Add("due to allowed fast", 1)
+		}
 	}
 
 	// The request needs to be deleted immediately to prevent cancels occurring asynchronously when
@@ -676,7 +684,9 @@ func (c *Peer) receiveChunk(msg *pp.Message, msgTime time.Time) error {
 				c.updateRequests("Peer.receiveChunk deleted request")
 			}
 		} else {
-			ChunksReceived.Add("unintended", 1)
+			if debugMetricsEnabled {
+				ChunksReceived.Add("unintended", 1)
+			}
 		}
 	}
 
@@ -685,7 +695,9 @@ func (c *Peer) receiveChunk(msg *pp.Message, msgTime time.Time) error {
 	// Do we actually want this chunk?
 	if t.haveChunk(ppReq) {
 		// panic(fmt.Sprintf("%+v", ppReq))
-		ChunksReceived.Add("redundant", 1)
+		if debugMetricsEnabled {
+			ChunksReceived.Add("redundant", 1)
+		}
 		c.allStats(add(1, func(cs *ConnStats) *Count { return &cs.ChunksReadWasted }))
 		return nil
 	}

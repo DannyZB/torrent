@@ -113,7 +113,9 @@ func (cn *peerConnMsgWriter) run(keepAliveTimeout time.Duration) {
 
 		if bufferEmpty && needKeepAlive {
 			cn.writeBuffer.Write(pp.Message{Keepalive: true}.MustMarshalBinary())
-			torrent.Add("written keepalives", 1)
+			if debugMetricsEnabled {
+				torrent.Add("written keepalives", 1)
+			}
 			bufferEmpty = false
 		}
 		if bufferEmpty {
