@@ -384,10 +384,13 @@ func (cn *PeerConn) postBitfield() {
 	if !cn.t.haveAnyPieces() {
 		return
 	}
+	bf := cn.t.bitfield()
 	cn.write(pp.Message{
 		Type:     pp.Bitfield,
-		Bitfield: cn.t.bitfield(),
+		Bitfield: bf,
 	})
+	// Safe to return to pool: marshalBitfield() has already copied the data
+	bitfieldPool.Put(bf[:0])
 	cn.sentHaves = bitmap.Bitmap{cn.t._completedPieces.Clone()}
 }
 

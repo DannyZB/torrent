@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 	"unsafe"
@@ -1099,12 +1100,37 @@ func (t *Torrent) writeChunk(piece int, begin int64, data []byte) (err error) {
 	return err
 }
 
+// Pool for bitfield slices to reduce allocations during peer handshakes
+var bitfieldPool = sync.Pool{
+	New: func() interface{} {
+		// Start with reasonable capacity - will be resized as needed
+		return make([]bool, 0, 1024)
+	},
+}
+
 func (t *Torrent) bitfield() (bf []bool) {
-	bf = make([]bool, t.numPieces())
+	numPieces := t.numPieces()
+	
+	// Get slice from pool and resize to needed capacity
+	bf = bitfieldPool.Get().([]bool)
+	if cap(bf) < numPieces {
+		bf = make([]bool, numPieces)
+	} else {
+		bf = bf[:numPieces]
+		// Clear the slice - zero out any existing data
+		for i := range bf {
+			bf[i] = false
+		}
+	}
+	
+	// Set completed pieces
 	t._completedPieces.Iterate(func(piece uint32) (again bool) {
-		bf[piece] = true
+		if int(piece) < len(bf) { // Bounds check for safety
+			bf[piece] = true
+		}
 		return true
 	})
+	
 	return
 }
 
