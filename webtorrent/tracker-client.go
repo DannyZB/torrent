@@ -218,16 +218,22 @@ func (tc *TrackerClient) closeUnusedOffers() {
 
 func (tc *TrackerClient) CloseOffersForInfohash(infoHash [20]byte) {
 	tc.mu.Lock()
-	defer tc.mu.Unlock()
 	var keysToDelete []string
+	var connectionsToClose []*wrappedPeerConnection
 	for key, offer := range tc.outboundOffers {
 		if offer.infoHash == infoHash {
-			offer.peerConnection.Close()
+			connectionsToClose = append(connectionsToClose, offer.peerConnection)
 			keysToDelete = append(keysToDelete, key)
 		}
 	}
 	for _, key := range keysToDelete {
 		delete(tc.outboundOffers, key)
+	}
+	tc.mu.Unlock()
+	
+	// Close connections outside the lock to avoid deadlock
+	for _, conn := range connectionsToClose {
+		conn.Close()
 	}
 }
 
