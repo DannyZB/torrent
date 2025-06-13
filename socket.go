@@ -28,11 +28,14 @@ type socket interface {
 	Close() error
 }
 
-func listen(n network, addr string, f firewallCallback, logger log.Logger) (socket, error) {
+func listen(n network, addr string, f firewallCallback, logger log.Logger, disableUTP bool) (socket, error) {
 	switch {
 	case n.Tcp:
 		return listenTcp(n.String(), addr)
 	case n.Udp:
+		if disableUTP {
+			return listenPlainUdp(n.String(), addr)
+		}
 		return listenUtp(n.String(), addr, f, logger)
 	default:
 		panic(n)
@@ -119,6 +122,7 @@ func listenAll(
 	port int,
 	f firewallCallback,
 	logger log.Logger,
+	disableUTP bool,
 ) ([]socket, error) {
 	if len(networks) == 0 {
 		return nil, nil
@@ -128,7 +132,7 @@ func listenAll(
 		nahs = append(nahs, networkAndHost{n, getHost(n.String())})
 	}
 	for {
-		ss, retry, err := listenAllRetry(nahs, port, f, logger)
+		ss, retry, err := listenAllRetry(nahs, port, f, logger, disableUTP)
 		if !retry {
 			return ss, err
 		}
@@ -159,6 +163,7 @@ func listenAllRetry(
 	port int,
 	f firewallCallback,
 	logger log.Logger,
+	disableUTP bool,
 ) (ss []socket, retry bool, err error) {
 	// Close all sockets on error or retry.
 	defer func() {
@@ -173,7 +178,7 @@ func listenAllRetry(
 	portStr := strconv.FormatInt(int64(port), 10)
 	for _, nah := range nahs {
 		var s socket
-		s, err = listen(nah.Network, net.JoinHostPort(nah.Host, portStr), f, logger)
+		s, err = listen(nah.Network, net.JoinHostPort(nah.Host, portStr), f, logger, disableUTP)
 		if err != nil {
 			if isUnsupportedNetworkError(err) {
 				err = nil
@@ -200,6 +205,38 @@ type firewallCallback func(net.Addr) bool
 func listenUtp(network, addr string, fc firewallCallback, logger log.Logger) (socket, error) {
 	us, err := NewUtpSocket(network, addr, fc, logger)
 	return utpSocketSocket{us, network}, err
+}
+
+func listenPlainUdp(network, addr string) (socket, error) {
+	pc, err := net.ListenPacket(network, addr)
+	if err != nil {
+		return nil, err
+	}
+	return packetConnSocket{pc, network}, nil
+}
+
+// Plain UDP socket wrapper for DHT when UTP is disabled
+type packetConnSocket struct {
+	net.PacketConn
+	network string
+}
+
+func (me packetConnSocket) DialerNetwork() string {
+	return me.network
+}
+
+func (me packetConnSocket) Dial(ctx context.Context, addr string) (net.Conn, error) {
+	// Plain UDP doesn't support reliable connections - return error
+	return nil, errors.New("plain UDP socket cannot dial connections")
+}
+
+func (me packetConnSocket) Accept() (net.Conn, error) {
+	// Plain UDP doesn't support accepting connections - return error
+	return nil, errors.New("plain UDP socket cannot accept connections")
+}
+
+func (me packetConnSocket) Addr() net.Addr {
+	return me.PacketConn.LocalAddr()
 }
 
 // utpSocket wrapper, additionally wrapped for the torrent package's socket interface.
