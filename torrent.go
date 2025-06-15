@@ -2360,7 +2360,7 @@ func (t *Torrent) Stats() TorrentStats {
 func (t *Torrent) CachedStats() TorrentStats {
 	const cacheDuration = 200 * time.Millisecond
 
-	// Try to use cached stats
+	// Try to use cached stats first
 	t.statsCacheMu.RLock()
 	if !t.statsCacheTime.IsZero() && time.Since(t.statsCacheTime) < cacheDuration {
 		stats := t.statsCache
@@ -2369,16 +2369,26 @@ func (t *Torrent) CachedStats() TorrentStats {
 	}
 	t.statsCacheMu.RUnlock()
 
-	// Need fresh stats
+	// Try to acquire write lock on cache to generate fresh stats
+	// This prevents multiple threads from computing stats simultaneously
+	// and eliminates the reentrancy deadlock risk
+	t.statsCacheMu.Lock()
+	defer t.statsCacheMu.Unlock()
+
+	// Double-check cache after acquiring write lock (another thread might have updated it)
+	if !t.statsCacheTime.IsZero() && time.Since(t.statsCacheTime) < cacheDuration {
+		return t.statsCache
+	}
+
+	// Generate fresh stats while holding only the cache lock, not client lock
+	// This prevents reentrancy deadlock where statsLocked() callbacks call CachedStats()
 	t.cl.rLock()
 	stats := t.statsLocked()
 	t.cl.rUnlock()
 
-	// Update cache
-	t.statsCacheMu.Lock()
+	// Update cache (already holding write lock)
 	t.statsCache = stats
 	t.statsCacheTime = time.Now()
-	t.statsCacheMu.Unlock()
 
 	return stats
 }

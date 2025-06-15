@@ -34,7 +34,7 @@ func listen(n network, addr string, f firewallCallback, logger log.Logger, disab
 		return listenTcp(n.String(), addr)
 	case n.Udp:
 		if disableUTP {
-			return listenPlainUdp(n.String(), addr)
+			return listenPlainUdp(n.String(), addr, f)
 		}
 		return listenUtp(n.String(), addr, f, logger)
 	default:
@@ -207,12 +207,39 @@ func listenUtp(network, addr string, fc firewallCallback, logger log.Logger) (so
 	return utpSocketSocket{us, network}, err
 }
 
-func listenPlainUdp(network, addr string) (socket, error) {
+func listenPlainUdp(network, addr string, fc firewallCallback) (socket, error) {
 	pc, err := net.ListenPacket(network, addr)
 	if err != nil {
 		return nil, err
 	}
+	if fc != nil {
+		pc = &firewallPacketConn{PacketConn: pc, firewall: fc}
+	}
 	return packetConnSocket{pc, network}, nil
+}
+
+// firewallPacketConn wraps a net.PacketConn and applies firewall filtering
+type firewallPacketConn struct {
+	net.PacketConn
+	firewall firewallCallback
+}
+
+func (fpc *firewallPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
+	for {
+		n, addr, err = fpc.PacketConn.ReadFrom(p)
+		if err != nil {
+			return n, addr, err
+		}
+		
+		// Apply firewall check - if firewall blocks (returns true), drop packet and read next
+		if fpc.firewall != nil && fpc.firewall(addr) {
+			// Packet blocked by firewall, continue to read next packet
+			continue
+		}
+		
+		// Packet allowed through firewall
+		return n, addr, err
+	}
 }
 
 // Plain UDP socket wrapper for DHT when UTP is disabled
