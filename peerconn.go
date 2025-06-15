@@ -804,7 +804,7 @@ func (c *PeerConn) mainReadLoop() (err error) {
 			messageTypesReceived.Add(msg.Type.String(), 1)
 		}
 		if msg.Type.FastExtension() && !c.fastEnabled() {
-			runSafeExtraneous(func() { 
+			runSafeExtraneous(func() {
 				if debugMetricsEnabled {
 					torrent.Add("fast messages received when extension is disabled", 1)
 				}
@@ -1093,6 +1093,7 @@ another:
 		if !c.unchoke(msg) {
 			return false
 		}
+		rateLimitFailures := 0
 		for r, state := range c.peerRequests {
 			if state.data == nil {
 				continue
@@ -1100,6 +1101,7 @@ another:
 			res := c.t.cl.config.UploadRateLimiter.ReserveN(time.Now(), int(r.Length))
 			if !res.OK() {
 				c.logger.Printf("upload rate limiter burst size insufficient for request length %d", r.Length)
+				rateLimitFailures++
 				// Skip this request and continue with others
 				continue
 			}
@@ -1116,6 +1118,11 @@ another:
 				return false
 			}
 			goto another
+		}
+		// If all requests failed rate limiting, break the outer loop to prevent infinite spinning
+		if rateLimitFailures > 0 && rateLimitFailures == len(c.peerRequests) {
+			c.logger.Printf("all %d peer requests failed rate limiting, stopping upload loop", rateLimitFailures)
+			break
 		}
 		return true
 	}
