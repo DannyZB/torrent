@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/anacrolix/chansync/events"
-	"github.com/anacrolix/log"
 	"github.com/anacrolix/missinggo/v2/pubsub"
 	"github.com/anacrolix/sync"
 
@@ -131,7 +130,6 @@ func (t *Torrent) Drop() {
 		panic(err)
 	}
 }
-
 
 // Number of bytes of the entire torrent we have completed. This is the sum of
 // completed pieces, and dirtied chunks of incomplete pieces. Do not use this
