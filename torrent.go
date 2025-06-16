@@ -1426,6 +1426,19 @@ func (t *Torrent) publishPieceStateChange(piece pieceIndex) {
 	})
 }
 
+func (t *Torrent) publishPieceStateChangeImmediate(piece pieceIndex) {
+	// Execute immediately to avoid sync.Cond deadlock in webseed context
+	cur := t.pieceState(piece)
+	p := &t.pieces[piece]
+	if cur != p.publicPieceState {
+		p.publicPieceState = cur
+		t.pieceStateChanges.Publish(PieceStateChange{
+			piece,
+			cur,
+		})
+	}
+}
+
 func (t *Torrent) pieceNumPendingChunks(piece pieceIndex) pp.Integer {
 	if t.pieceComplete(piece) {
 		return 0

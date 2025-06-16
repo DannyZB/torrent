@@ -213,7 +213,7 @@ func (ws *webseedPeer) requestResultHandler(r Request, webseedRequest webseed.Re
 		}
 		return err
 	}
-	err = ws.peer.receiveChunk(&pp.Message{
+	err = ws.peer.receiveChunkFromWebseed(&pp.Message{
 		Type:  pp.Piece,
 		Index: r.Index,
 		Begin: r.Begin,

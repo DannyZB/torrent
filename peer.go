@@ -623,6 +623,15 @@ func (c *Peer) doChunkReadStats(size int64) {
 
 // Handle a received chunk from a peer.
 func (c *Peer) receiveChunk(msg *pp.Message, msgTime time.Time) error {
+	return c.receiveChunkImpl(msg, msgTime, false)
+}
+
+// Handle a received chunk from a webseed peer with immediate piece state change notification
+func (c *Peer) receiveChunkFromWebseed(msg *pp.Message, msgTime time.Time) error {
+	return c.receiveChunkImpl(msg, msgTime, true)
+}
+
+func (c *Peer) receiveChunkImpl(msg *pp.Message, msgTime time.Time, immediate bool) error {
 	if debugMetricsEnabled {
 		ChunksReceived.Add("total", 1)
 	}
@@ -783,7 +792,11 @@ func (c *Peer) receiveChunk(msg *pp.Message, msgTime time.Time) error {
 
 	cl.event.Broadcast()
 	// We do this because we've written a chunk, and may change PieceState.Partial.
-	t.publishPieceStateChange(pieceIndex(ppReq.Index))
+	if immediate {
+		t.publishPieceStateChangeImmediate(pieceIndex(ppReq.Index))
+	} else {
+		t.publishPieceStateChange(pieceIndex(ppReq.Index))
+	}
 
 	return nil
 }
