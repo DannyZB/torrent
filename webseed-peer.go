@@ -123,7 +123,7 @@ func (ws *webseedPeer) requestIteratorLocked(requesterIndex int, x RequestIndex)
 		return false
 	}
 	
-	err := result.Err
+	err = result.Err
 	if err != nil {
 		// Handle error cases
 		switch {
