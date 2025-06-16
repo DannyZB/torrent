@@ -156,11 +156,7 @@ func (cn *webseedPeer) ban() {
 func (ws *webseedPeer) handleUpdateRequests() {
 	// Because this is synchronous, webseed peers seem to get first dibs on newly prioritized
 	// pieces.
-	go func() {
-		ws.peer.t.cl.lock()
-		defer ws.peer.t.cl.unlock()
-		ws.peer.maybeUpdateActualRequestState()
-	}()
+	ws.peer.maybeUpdateActualRequestState()
 }
 
 func (ws *webseedPeer) onClose() {
