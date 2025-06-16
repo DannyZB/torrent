@@ -59,7 +59,7 @@ type Client struct {
 	counters  TorrentStatCounters
 
 	_mu    lockWithDeferreds
-	event  Event
+	event  sync.Cond
 	closed chansync.SetOnce
 
 	config *ClientConfig
@@ -217,6 +217,7 @@ func (cl *Client) init(cfg *ClientConfig) {
 	g.MakeMap(&cl.torrents)
 	cl.torrentsByShortHash = make(map[metainfo.Hash]*Torrent)
 	cl.activeAnnounceLimiter.SlotsPerKey = 2
+	cl.event.L = cl.locker()
 	cl.ipBlockList = cfg.IPBlocklist
 	cl.httpClient = &http.Client{
 		Transport: cfg.WebTransport,
@@ -1375,7 +1376,9 @@ func (cl *Client) newTorrentOpt(opts AddTorrentOpts) (t *Torrent) {
 		storageOpener:       storageClient,
 		maxEstablishedConns: cl.config.EstablishedConnsPerTorrent,
 
-		metadataChanged: Event{},
+		metadataChanged: sync.Cond{
+			L: cl.locker(),
+		},
 		webSeeds:     make(map[string]*Peer),
 		gotMetainfoC: make(chan struct{}),
 	}
@@ -1574,7 +1577,8 @@ func (cl *Client) WaitAll() bool {
 		if cl.closed.IsSet() {
 			return false
 		}
-		cl.event.Wait(cl.locker())
+		cl._mu.FlushDeferred()
+		cl.event.Wait()
 	}
 	return true
 }

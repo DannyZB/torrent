@@ -146,7 +146,7 @@ type Torrent struct {
 	// Each element corresponds to the 16KiB metadata pieces. If true, we have
 	// received that piece.
 	metadataCompletedChunks []bool
-	metadataChanged         Event
+	metadataChanged         sync.Cond
 
 	// Closed when .Info is obtained.
 	gotMetainfoC chan struct{}
@@ -2337,7 +2337,8 @@ func (t *Torrent) dhtAnnouncer(s DhtServer) {
 			}
 			break
 		wait:
-			cl.event.Wait(cl.locker())
+			cl._mu.FlushDeferred()
+			cl.event.Wait()
 			// Add small jitter to prevent thundering herd after wake-up
 			cl.unlock()
 			time.Sleep(time.Duration(rand.Int63n(int64(50 * time.Millisecond))))
