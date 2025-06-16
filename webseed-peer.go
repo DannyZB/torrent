@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"sync"
 	"time"
 
 	"github.com/RoaringBitmap/roaring"
@@ -25,7 +24,9 @@ type webseedPeer struct {
 	peer             Peer
 	client           webseed.Client
 	activeRequests   map[Request]webseed.Request
-	requesterCond    sync.Cond
+	// Channel-based condition variable to avoid lockWithDeferreds incompatibility
+	requesterWakeup  chan struct{}
+	requesterClosed  chan struct{}
 	lastUnhandledErr time.Time
 }
 
@@ -76,7 +77,11 @@ func (ws *webseedPeer) intoSpec(r Request) webseed.RequestSpec {
 }
 
 func (ws *webseedPeer) _request(r Request) bool {
-	ws.requesterCond.Signal()
+	select {
+	case ws.requesterWakeup <- struct{}{}:
+	default:
+		// Channel full, requesters will wake up anyway
+	}
 	return true
 }
 
@@ -98,12 +103,10 @@ func (ws *webseedPeer) requestIteratorLocked(requesterIndex int, x RequestIndex)
 	}
 	webseedRequest := ws.client.StartNewRequest(ws.intoSpec(r))
 	ws.activeRequests[r] = webseedRequest
-	locker := ws.requesterCond.L
-	err = func() error {
-		locker.Unlock()
-		defer locker.Lock()
-		return ws.requestResultHandler(r, webseedRequest)
-	}()
+	// Release client lock during request processing
+	ws.peer.t.cl.unlock()
+	err = ws.requestResultHandler(r, webseedRequest)
+	ws.peer.t.cl.lock()
 	delete(ws.activeRequests, r)
 	if err != nil {
 		//level := log.Warning
@@ -115,12 +118,12 @@ func (ws *webseedPeer) requestIteratorLocked(requesterIndex int, x RequestIndex)
 		// This used to occur only on webseed.ErrTooFast but I think it makes sense to slow down any
 		// kind of error. There are maxRequests (in Torrent.addWebSeed) requestors bouncing around
 		// it doesn't hurt to slow a few down if there are issues.
-		locker.Unlock()
+		ws.peer.t.cl.unlock()
 		select {
 		case <-ws.peer.closed.Done():
 		case <-time.After(time.Duration(rand.Int63n(int64(10 * time.Second)))):
 		}
-		locker.Lock()
+		ws.peer.t.cl.lock()
 		ws.peer.updateRequests("webseedPeer request errored")
 	}
 	return false
@@ -128,17 +131,38 @@ func (ws *webseedPeer) requestIteratorLocked(requesterIndex int, x RequestIndex)
 }
 
 func (ws *webseedPeer) requester(i int) {
-	ws.requesterCond.L.Lock()
-	defer ws.requesterCond.L.Unlock()
 start:
 	for !ws.peer.closed.IsSet() {
+		ws.peer.t.cl.lock()
+		// Check for requests while holding the client lock
+		processedAnyRequests := false
 		for reqIndex := range ws.peer.requestState.Requests.Iterator() {
+			// requestIteratorLocked handles its own unlock/lock cycle
 			if !ws.requestIteratorLocked(i, reqIndex) {
+				// Lock is still held here, request processing failed, restart
+				ws.peer.t.cl.unlock()
 				goto start
 			}
+			// Request was processed successfully, check for more
+			processedAnyRequests = true
 		}
-		// Found no requests to handle, so wait.
-		ws.requesterCond.Wait()
+		
+		if processedAnyRequests {
+			// We processed requests, unlock and immediately check for more
+			ws.peer.t.cl.unlock()
+			continue
+		}
+		
+		// No requests to process, unlock and wait for signal
+		ws.peer.t.cl.unlock()
+		select {
+		case <-ws.requesterWakeup:
+			// Wakeup signal received, check for more work
+		case <-ws.requesterClosed:
+			return
+		case <-ws.peer.closed.Done():
+			return
+		}
 	}
 }
 
@@ -172,7 +196,13 @@ func (ws *webseedPeer) onClose() {
 			p.updateRequests("webseedPeer.onClose")
 		}
 	})
-	ws.requesterCond.Broadcast()
+	// Safe close: check if already closed to avoid panic
+	select {
+	case <-ws.requesterClosed:
+		// Already closed
+	default:
+		close(ws.requesterClosed)
+	}
 }
 
 func (ws *webseedPeer) requestResultHandler(r Request, webseedRequest webseed.Request) error {

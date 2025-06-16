@@ -3165,7 +3165,8 @@ func (t *Torrent) addWebSeed(url string, opts ...AddWebSeedsOpt) bool {
 	// conns. ~4x maxRequests would be about right.
 	ws.peer.PeerMaxRequests = 4 * ws.client.MaxRequests
 	ws.peer.initUpdateRequestsTimer()
-	ws.requesterCond.L = t.cl.locker()
+	ws.requesterWakeup = make(chan struct{}, ws.client.MaxRequests)
+	ws.requesterClosed = make(chan struct{})
 	for i := 0; i < ws.client.MaxRequests; i += 1 {
 		go ws.requester(i)
 	}
