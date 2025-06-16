@@ -139,7 +139,6 @@ func waitForConns(t *Torrent) {
 		for range t.conns {
 			return
 		}
-		t.cl._mu.FlushDeferred()
 		t.cl.event.Wait()
 	}
 }

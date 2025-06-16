@@ -216,7 +216,6 @@ func TestTorrentMetainfoIncompleteMetadata(t *testing.T) {
 			}.MustMarshalBinary())
 			require.NoError(t, err)
 		}()
-		cl._mu.FlushDeferred()
 		tt.metadataChanged.Wait()
 	}()
 	assert.Equal(t, make([]byte, len(mi.InfoBytes)), tt.metadataBytes)

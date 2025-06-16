@@ -217,7 +217,7 @@ func (cl *Client) init(cfg *ClientConfig) {
 	g.MakeMap(&cl.torrents)
 	cl.torrentsByShortHash = make(map[metainfo.Hash]*Torrent)
 	cl.activeAnnounceLimiter.SlotsPerKey = 2
-	cl.event.L = cl.locker()
+	cl.event.L = cl._mu.GetSafeLocker()
 	cl.ipBlockList = cfg.IPBlocklist
 	cl.httpClient = &http.Client{
 		Transport: cfg.WebTransport,
@@ -1377,7 +1377,7 @@ func (cl *Client) newTorrentOpt(opts AddTorrentOpts) (t *Torrent) {
 		maxEstablishedConns: cl.config.EstablishedConnsPerTorrent,
 
 		metadataChanged: sync.Cond{
-			L: cl.locker(),
+			L: cl._mu.GetSafeLocker(),
 		},
 		webSeeds:     make(map[string]*Peer),
 		gotMetainfoC: make(chan struct{}),
@@ -1577,7 +1577,6 @@ func (cl *Client) WaitAll() bool {
 		if cl.closed.IsSet() {
 			return false
 		}
-		cl._mu.FlushDeferred()
 		cl.event.Wait()
 	}
 	return true

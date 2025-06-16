@@ -2337,7 +2337,6 @@ func (t *Torrent) dhtAnnouncer(s DhtServer) {
 			}
 			break
 		wait:
-			cl._mu.FlushDeferred()
 			cl.event.Wait()
 			// Add small jitter to prevent thundering herd after wake-up
 			cl.unlock()
