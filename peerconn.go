@@ -1134,6 +1134,8 @@ func (cn *PeerConn) drop() {
 }
 
 func (cn *PeerConn) ban() {
+	cn.t.cl.lock()
+	defer cn.t.cl.unlock()
 	cn.t.cl.banPeerIP(cn.remoteIp())
 }
 

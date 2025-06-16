@@ -150,6 +150,11 @@ func (cn *peerConnMsgWriter) run(keepAliveTimeout time.Duration) {
 				err = writeErr
 				break
 			}
+			// Safety check: if no progress and no error, break to prevent infinite loop
+			if n == 0 {
+				err = io.ErrShortWrite
+				break
+			}
 		}
 
 		if err != nil {
