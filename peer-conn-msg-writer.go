@@ -42,9 +42,7 @@ func (pc *PeerConn) startMessageWriter() {
 }
 
 func (pc *PeerConn) messageWriterRunner() {
-	defer pc.locker().Unlock()
 	defer pc.close()
-	defer pc.locker().Lock()
 	pc.messageWriter.run(pc.t.cl.config.KeepAliveTimeout)
 }
 
