@@ -103,29 +103,67 @@ func (ws *webseedPeer) requestIteratorLocked(requesterIndex int, x RequestIndex)
 	}
 	webseedRequest := ws.client.StartNewRequest(ws.intoSpec(r))
 	ws.activeRequests[r] = webseedRequest
-	// Release client lock during network request
+	// Release client lock during network request  
 	ws.peer.t.cl.unlock()
-	err = ws.requestResultHandler(r, webseedRequest)
 	
-	// Re-acquire lock to clean up and handle errors
+	// Handle network request without lock
+	result := <-webseedRequest.Result
+	close(webseedRequest.Result)
+	if len(result.Bytes) != 0 || result.Err == nil {
+		ws.peer.doChunkReadStats(int64(len(result.Bytes)))
+	}
+	ws.peer.readBytes(int64(len(result.Bytes)))
+	
+	// Re-acquire lock for result processing and cleanup
 	ws.peer.t.cl.lock()
 	delete(ws.activeRequests, r)
+	
+	if ws.peer.t.closed.IsSet() {
+		ws.peer.t.cl.unlock()
+		return false
+	}
+	
+	err := result.Err
 	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			ws.peer.logger.Levelf(log.Debug, "requester %v: error doing webseed request %v: %v", requesterIndex, r, err)
+		// Handle error cases
+		switch {
+		case errors.Is(err, context.Canceled):
+		case errors.Is(err, webseed.ErrTooFast):
+		case ws.peer.closed.IsSet():
+		default:
+			ws.peer.logger.Printf("Request %v rejected: %v", r, err)
+			if webseedPeerCloseOnUnhandledError {
+				log.Printf("closing %v", ws)
+				ws.peer.close()
+			} else {
+				ws.lastUnhandledErr = time.Now()
+			}
 		}
+		if !ws.peer.remoteRejectedRequest(ws.peer.t.requestIndexFromRequest(r)) {
+			ws.peer.logger.Printf("Request %v rejected: invalid reject", r)
+		}
+		
 		// Handle error with backoff, release lock during sleep
 		ws.peer.t.cl.unlock()
 		select {
 		case <-ws.peer.closed.Done():
 		case <-time.After(time.Duration(rand.Int63n(int64(10 * time.Second)))):
 		}
-		ws.peer.t.cl.lock()
-		ws.peer.updateRequests("webseedPeer request errored")
-		// Return with no lock held to allow requester restart
-		return false
+		return false // Return with no lock held
 	}
-	// Success: return with no lock held to allow requester restart  
+	
+	// Success: process the chunk
+	err = ws.peer.receiveChunkFromWebseed(&pp.Message{
+		Type:  pp.Piece,
+		Index: r.Index,
+		Begin: r.Begin,
+		Piece: result.Bytes,
+	}, time.Now())
+	if err != nil {
+		ws.peer.logger.Printf("error receiving chunk for request %v: %v", r, err)
+	}
+	
+	// Success: return with no lock held
 	ws.peer.t.cl.unlock()
 	return false
 
@@ -201,60 +239,6 @@ func (ws *webseedPeer) onClose() {
 	}
 }
 
-func (ws *webseedPeer) requestResultHandler(r Request, webseedRequest webseed.Request) error {
-	result := <-webseedRequest.Result
-	close(webseedRequest.Result) // one-shot
-	// We do this here rather than inside receiveChunk, since we want to count errors too. I'm not
-	// sure if we can divine which errors indicate cancellation on our end without hitting the
-	// network though.
-	if len(result.Bytes) != 0 || result.Err == nil {
-		// Increment ChunksRead and friends
-		ws.peer.doChunkReadStats(int64(len(result.Bytes)))
-	}
-	ws.peer.readBytes(int64(len(result.Bytes)))
-	ws.peer.t.cl.lock()
-	defer ws.peer.t.cl.unlock()
-	if ws.peer.t.closed.IsSet() {
-		return nil
-	}
-	err := result.Err
-	if err != nil {
-		switch {
-		case errors.Is(err, context.Canceled):
-		case errors.Is(err, webseed.ErrTooFast):
-		case ws.peer.closed.IsSet():
-		default:
-			ws.peer.logger.Printf("Request %v rejected: %v", r, result.Err)
-			// // Here lies my attempt to extract something concrete from Go's error system. RIP.
-			// cfg := spew.NewDefaultConfig()
-			// cfg.DisableMethods = true
-			// cfg.Dump(result.Err)
-
-			if webseedPeerCloseOnUnhandledError {
-				log.Printf("closing %v", ws)
-				ws.peer.close()
-			} else {
-				ws.lastUnhandledErr = time.Now()
-			}
-		}
-		if !ws.peer.remoteRejectedRequest(ws.peer.t.requestIndexFromRequest(r)) {
-			ws.peer.logger.Printf("Request %v rejected: invalid reject", r)
-			return errors.New("invalid reject")
-		}
-		return err
-	}
-	err = ws.peer.receiveChunkFromWebseed(&pp.Message{
-		Type:  pp.Piece,
-		Index: r.Index,
-		Begin: r.Begin,
-		Piece: result.Bytes,
-	}, time.Now())
-	if err != nil {
-		ws.peer.logger.Printf("error receiving chunk for request %v: %v", r, err)
-		return err
-	}
-	return err
-}
 
 func (me *webseedPeer) peerPieces() *roaring.Bitmap {
 	return &me.client.Pieces
