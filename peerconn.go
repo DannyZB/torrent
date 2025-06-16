@@ -775,8 +775,8 @@ func (c *PeerConn) mainReadLoop() (err error) {
 	for {
 		var msg pp.Message
 		func() {
-			cl.unlock()
-			defer cl.lock()
+			cl._mu.internal.Unlock() // Use internal unlock to bypass deferred actions
+			defer cl._mu.internal.Lock() // Use internal lock to bypass deferred actions
 			err = decoder.Decode(&msg)
 			if err != nil {
 				err = fmt.Errorf("decoding message: %w", err)
@@ -1136,6 +1136,10 @@ func (cn *PeerConn) drop() {
 func (cn *PeerConn) ban() {
 	cn.t.cl.lock()
 	defer cn.t.cl.unlock()
+	cn.banLocked()
+}
+
+func (cn *PeerConn) banLocked() {
 	cn.t.cl.banPeerIP(cn.remoteIp())
 }
 

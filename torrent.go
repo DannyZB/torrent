@@ -146,7 +146,7 @@ type Torrent struct {
 	// Each element corresponds to the 16KiB metadata pieces. If true, we have
 	// received that piece.
 	metadataCompletedChunks []bool
-	metadataChanged         sync.Cond
+	metadataChanged         compatCond
 
 	// Closed when .Info is obtained.
 	gotMetainfoC chan struct{}
@@ -2633,7 +2633,7 @@ func (t *Torrent) pieceHashed(piece pieceIndex, passed bool, hashIoErr error) {
 		}
 		t.clearPieceTouchers(piece)
 		hasDirty := p.hasDirtyChunks()
-		t.cl.unlock()
+		t.cl._mu.internal.Unlock() // Use internal unlock to bypass deferred actions
 		if hasDirty {
 			p.Flush() // You can be synchronous here!
 		}
@@ -2641,7 +2641,7 @@ func (t *Torrent) pieceHashed(piece pieceIndex, passed bool, hashIoErr error) {
 		if err != nil {
 			t.logger.Levelf(log.Warning, "%T: error marking piece complete %d: %s", t.storage, piece, err)
 		}
-		t.cl.lock()
+		t.cl._mu.internal.Lock() // Use internal lock to bypass deferred actions
 
 		if t.closed.IsSet() {
 			return
@@ -2696,7 +2696,9 @@ func (t *Torrent) pieceHashed(piece pieceIndex, passed bool, hashIoErr error) {
 						c,
 						piece,
 					)
-					c.ban()
+					if pc, ok := c.TryAsPeerConn(); ok {
+						pc.banLocked()
+					}
 				}
 			}
 		}

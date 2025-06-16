@@ -752,8 +752,8 @@ func (c *Peer) receiveChunkImpl(msg *pp.Message, msgTime time.Time, immediate bo
 	}
 
 	err = func() error {
-		cl.unlock()
-		defer cl.lock()
+		cl._mu.internal.Unlock() // Use internal unlock to bypass deferred actions
+		defer cl._mu.internal.Lock() // Use internal lock to bypass deferred actions
 		// Opportunistically do this here while we aren't holding the client lock.
 		recordBlockForSmartBan()
 		concurrentChunkWrites.Add(1)
