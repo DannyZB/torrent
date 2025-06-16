@@ -16,8 +16,7 @@ func (pc *PeerConn) initMessageWriter() {
 	w := &pc.messageWriter
 	*w = peerConnMsgWriter{
 		fillWriteBuffer: func() {
-			pc.locker().Lock()
-			defer pc.locker().Unlock()
+			// Client lock already held by messageWriterRunner
 			if pc.closed.IsSet() {
 				return
 			}
@@ -42,7 +41,9 @@ func (pc *PeerConn) startMessageWriter() {
 }
 
 func (pc *PeerConn) messageWriterRunner() {
+	defer pc.locker().Unlock()
 	defer pc.close()
+	defer pc.locker().Lock()
 	pc.messageWriter.run(pc.t.cl.config.KeepAliveTimeout)
 }
 
