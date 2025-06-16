@@ -122,9 +122,10 @@ func (ws *webseedPeer) requestIteratorLocked(requesterIndex int, x RequestIndex)
 		}
 		ws.peer.t.cl.lock()
 		ws.peer.updateRequests("webseedPeer request errored")
-		ws.peer.t.cl.unlock()
+		// Return with no lock held to allow requester restart
 		return false
 	}
+	// Success: return with no lock held to allow requester restart  
 	ws.peer.t.cl.unlock()
 	return false
 
