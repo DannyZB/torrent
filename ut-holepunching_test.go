@@ -139,7 +139,7 @@ func waitForConns(t *Torrent) {
 		for range t.conns {
 			return
 		}
-		t.cl.event.Wait()
+		t.cl.event.Wait(t.cl.locker())
 	}
 }
 
