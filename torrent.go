@@ -2325,6 +2325,10 @@ func (t *Torrent) dhtAnnouncer(s DhtServer) {
 			break
 		wait:
 			cl.event.Wait()
+			// Add small jitter to prevent thundering herd after wake-up
+			cl.unlock()
+			time.Sleep(time.Duration(rand.Int63n(int64(50 * time.Millisecond))))
+			cl.lock()
 		}
 		func() {
 			t.numDHTAnnounces++
