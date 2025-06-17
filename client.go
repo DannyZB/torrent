@@ -811,26 +811,26 @@ func (cl *Client) dialAndCompleteHandshake(opts outgoingConnOpts) (c *PeerConn, 
 	if firstDialResult.Conn == nil {
 		// No dialers worked. Try to initiate a holepunching rendezvous.
 		if holepunchAddrErr == nil {
-			cl.lock()
+			cl._mu.internal.Lock() // Use internal lock to bypass deferred actions
 			if !opts.receivedHolepunchConnect {
 				g.MakeMapIfNilAndSet(&cl.undialableWithoutHolepunch, holepunchAddr, struct{}{})
 			}
 			if !opts.skipHolepunchRendezvous {
 				opts.t.trySendHolepunchRendezvous(holepunchAddr)
 			}
-			cl.unlock()
+			cl._mu.internal.Unlock() // Use internal unlock to bypass deferred actions
 		}
 		err = fmt.Errorf("all initial dials failed")
 		return
 	}
 	if opts.receivedHolepunchConnect && holepunchAddrErr == nil {
-		cl.lock()
+		cl._mu.internal.Lock() // Use internal lock to bypass deferred actions
 		if g.MapContains(cl.undialableWithoutHolepunch, holepunchAddr) {
 			g.MakeMapIfNilAndSet(&cl.dialableOnlyAfterHolepunch, holepunchAddr, struct{}{})
 		}
 		g.MakeMapIfNil(&cl.dialedSuccessfullyAfterHolepunchConnect)
 		g.MapInsert(cl.dialedSuccessfullyAfterHolepunchConnect, holepunchAddr, struct{}{})
-		cl.unlock()
+		cl._mu.internal.Unlock() // Use internal unlock to bypass deferred actions
 	}
 	c, err = doProtocolHandshakeOnDialResult(
 		opts.t,
