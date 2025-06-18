@@ -102,13 +102,21 @@ func (cn *peerConnMsgWriter) run(keepAliveTimeout time.Duration) {
 		}
 
 		cn.mu.Lock()
-		// Only calculate keepAlive if buffer is empty and we might need one
-		var needKeepAlive bool
+		// Check if we need to calculate keepAlive
 		bufferEmpty := cn.writeBuffer.Len() == 0
-		if bufferEmpty && time.Since(lastWrite) >= keepAliveTimeout {
+		shouldCheckKeepAlive := bufferEmpty && time.Since(lastWrite) >= keepAliveTimeout
+		cn.mu.Unlock()
+
+		// Call keepAlive without holding the lock to avoid deadlock
+		var needKeepAlive bool
+		if shouldCheckKeepAlive {
 			needKeepAlive = cn.keepAlive()
 		}
 
+		// Re-acquire lock to update buffer if needed
+		cn.mu.Lock()
+		// Re-check buffer empty state in case it changed
+		bufferEmpty = cn.writeBuffer.Len() == 0
 		if bufferEmpty && needKeepAlive {
 			cn.writeBuffer.Write(pp.Message{Keepalive: true}.MustMarshalBinary())
 			if debugMetricsEnabled {
