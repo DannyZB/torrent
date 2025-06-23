@@ -130,7 +130,7 @@ func (ws *webseedPeer) requestIteratorLocked(requesterIndex int, x RequestIndex)
 func (ws *webseedPeer) requester(i int) {
 start:
 	for !ws.peer.closed.IsSet() {
-		ws.peer.t.cl.lock()
+		ws.peer.t.cl._mu.internal.Lock() // Use internal lock to bypass deferred actions
 		// Check for requests while holding the client lock
 		processedAnyRequests := false
 		for reqIndex := range ws.peer.requestState.Requests.Iterator() {
@@ -145,12 +145,12 @@ start:
 		
 		if processedAnyRequests {
 			// We processed requests, unlock and immediately check for more
-			ws.peer.t.cl.unlock()
+			ws.peer.t.cl._mu.internal.Unlock() // Use internal unlock to bypass deferred actions
 			continue
 		}
 		
 		// No requests to process, unlock and wait for signal
-		ws.peer.t.cl.unlock()
+		ws.peer.t.cl._mu.internal.Unlock() // Use internal unlock to bypass deferred actions
 		select {
 		case <-ws.requesterWakeup:
 			// Wakeup signal received, check for more work
