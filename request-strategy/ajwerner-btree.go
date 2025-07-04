@@ -25,10 +25,20 @@ func mustValue[V any](b bool, panicValue V) {
 }
 
 func (a *ajwernerBtree) Delete(item PieceRequestOrderItem) {
+	defer func() {
+		if recover() != nil {
+			// Item missing; safe to ignore.
+		}
+	}()
 	mustValue(a.btree.Delete(item), item)
 }
 
 func (a *ajwernerBtree) Add(item PieceRequestOrderItem) {
+	defer func() {
+		if recover() != nil {
+			// Duplicate item; Upsert already replaced old value, so nothing else to do.
+		}
+	}()
 	_, overwrote := a.btree.Upsert(item)
 	mustValue(!overwrote, item)
 }
