@@ -28,6 +28,9 @@ type trackerScraper struct {
 	// TODO: chansync
 	stopOnce sync.Once
 	stopCh   chan struct{}
+	
+	originalUrl      string
+	consecutiveFails int
 }
 
 type torrentTrackerAnnouncer interface {
@@ -72,6 +75,8 @@ type trackerAnnounceResult struct {
 	NumPeers  int
 	Interval  time.Duration
 	Completed time.Time
+	Seeders   int32
+	Leechers  int32
 }
 
 func (me *trackerScraper) getIp() (ip net.IP, err error) {
@@ -190,6 +195,8 @@ func (me *trackerScraper) announce(
 	me.t.AddPeers(peerInfos(nil).AppendFromTracker(res.Peers))
 	ret.NumPeers = len(res.Peers)
 	ret.Interval = time.Duration(res.Interval) * time.Second
+	ret.Seeders = res.Seeders
+	ret.Leechers = res.Leechers
 	return
 }
 
@@ -238,6 +245,11 @@ func (me *trackerScraper) Run() {
 		e = tracker.None
 		me.t.cl.lock()
 		me.lastAnnounce = ar
+		if ar.Err != nil {
+			me.consecutiveFails++
+		} else {
+			me.consecutiveFails = 0
+		}
 		me.t.cl.unlock()
 
 	recalculate:

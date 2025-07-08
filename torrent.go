@@ -2161,6 +2161,7 @@ func (t *Torrent) startScrapingTrackerWithInfohash(u *url.URL, urlStr string, sh
 			t:               t,
 			lookupTrackerIp: t.cl.config.LookupTrackerIp,
 			stopCh:          make(chan struct{}),
+			originalUrl:     urlStr,
 		}
 		go newAnnouncer.Run()
 		return newAnnouncer
@@ -3583,16 +3584,24 @@ func (t *Torrent) slogger() *slog.Logger {
 type TrackerStatus struct {
 	// URL of the tracker
 	URL string
+	// Tier is the tier index of this tracker (0 for single announce, 1+ for announce list)
+	Tier int
 	// LastError contains the most recent error from this tracker, nil if last announce was successful
 	LastError error
 	// LastAnnounce is the time of the last announce attempt
 	LastAnnounce time.Time
 	// NumPeers is the number of peers returned by the last successful announce
 	NumPeers int
+	// Seeders is the number of seeders reported by the tracker
+	Seeders int32
+	// Leechers is the number of leechers reported by the tracker
+	Leechers int32
 	// Interval is the announce interval suggested by the tracker
 	Interval time.Duration
 	// NextAnnounce is the calculated time for the next announce
 	NextAnnounce time.Time
+	// ConsecutiveFails is the number of consecutive failed announces
+	ConsecutiveFails int
 }
 
 // IsWorking returns true if the tracker is responding without errors
@@ -3657,6 +3666,21 @@ func (ts TrackerStatus) ErrorType() string {
 	}
 }
 
+// trackerTier returns the tier for a given tracker URL
+func (t *Torrent) trackerTier(trackerURL string) int {
+	if t.metainfo.Announce == trackerURL {
+		return 0
+	}
+	for tierIndex, tier := range t.metainfo.AnnounceList {
+		for _, url := range tier {
+			if url == trackerURL {
+				return tierIndex + 1
+			}
+		}
+	}
+	return 0
+}
+
 // TrackerStatuses returns the status of all trackers for this torrent including any errors
 func (t *Torrent) TrackerStatuses() []TrackerStatus {
 	t.cl.rLock()
@@ -3668,11 +3692,15 @@ func (t *Torrent) TrackerStatuses() []TrackerStatus {
 		switch ta := announcer.(type) {
 		case *trackerScraper:
 			status := TrackerStatus{
-				URL:          ta.u.String(),
-				LastError:    ta.lastAnnounce.Err,
-				LastAnnounce: ta.lastAnnounce.Completed,
-				NumPeers:     ta.lastAnnounce.NumPeers,
-				Interval:     ta.lastAnnounce.Interval,
+				URL:              ta.originalUrl,
+				Tier:             t.trackerTier(ta.originalUrl),
+				LastError:        ta.lastAnnounce.Err,
+				LastAnnounce:     ta.lastAnnounce.Completed,
+				NumPeers:         ta.lastAnnounce.NumPeers,
+				Seeders:          ta.lastAnnounce.Seeders,
+				Leechers:         ta.lastAnnounce.Leechers,
+				Interval:         ta.lastAnnounce.Interval,
+				ConsecutiveFails: ta.consecutiveFails,
 			}
 
 			// Calculate next announce time
@@ -3684,13 +3712,22 @@ func (t *Torrent) TrackerStatuses() []TrackerStatus {
 		case *websocketTrackerStatus:
 			// Add support for websocket trackers if needed
 			status := TrackerStatus{
-				URL: ta.url.String(),
+				URL:  ta.url.String(),
+				Tier: t.trackerTier(ta.url.String()),
 				// Websocket trackers don't have the same error structure
 				// This would need to be extended based on websocket tracker implementation
 			}
 			statuses = append(statuses, status)
 		}
 	}
+
+	// Sort by tier then URL for consistent output
+	slices.SortFunc(statuses, func(a, b TrackerStatus) int {
+		if a.Tier != b.Tier {
+			return a.Tier - b.Tier
+		}
+		return strings.Compare(a.URL, b.URL)
+	})
 
 	return statuses
 }
