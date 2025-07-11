@@ -104,26 +104,27 @@ func (ws *webseedPeer) requestIteratorLocked(requesterIndex int, x RequestIndex)
 	webseedRequest := ws.client.StartNewRequest(ws.intoSpec(r))
 	ws.activeRequests[r] = webseedRequest
 	// Release client lock during network request  
-	ws.peer.t.cl.unlock()
+	ws.peer.t.cl._mu.internal.Unlock()
 	
 	err = ws.requestResultHandler(r, webseedRequest)
 	
-	ws.peer.t.cl.lock()
+	ws.peer.t.cl._mu.internal.Lock()
 	delete(ws.activeRequests, r)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			ws.peer.logger.Levelf(log.Debug, "requester %v: error doing webseed request %v: %v", requesterIndex, r, err)
 		}
 		// Handle error with backoff, release lock during sleep
-		ws.peer.t.cl.unlock()
+		ws.peer.t.cl._mu.internal.Unlock()
 		select {
 		case <-ws.peer.closed.Done():
 		case <-time.After(time.Duration(rand.Int63n(int64(10 * time.Second)))):
 		}
+		ws.peer.t.cl._mu.internal.Lock() // Re-acquire lock before returning
 		return false
 	}
-	ws.peer.t.cl.unlock()
-	return false
+	// Success - return true with lock still held
+	return true
 
 }
 
@@ -134,9 +135,10 @@ start:
 		// Check for requests while holding the client lock
 		processedAnyRequests := false
 		for reqIndex := range ws.peer.requestState.Requests.Iterator() {
-			// requestIteratorLocked handles its own unlock/lock cycle
+			// requestIteratorLocked returns with lock held in all cases
 			if !ws.requestIteratorLocked(i, reqIndex) {
-				// requestIteratorLocked already released lock when returning false, restart
+				// Error occurred, lock is still held, unlock before restart
+				ws.peer.t.cl._mu.internal.Unlock()
 				goto start
 			}
 			// Request was processed successfully, check for more
@@ -208,8 +210,8 @@ func (ws *webseedPeer) requestResultHandler(r Request, webseedRequest webseed.Re
 		ws.peer.doChunkReadStats(int64(len(result.Bytes)))
 	}
 	ws.peer.readBytes(int64(len(result.Bytes)))
-	ws.peer.t.cl.lock()
-	defer ws.peer.t.cl.unlock()
+	ws.peer.t.cl._mu.internal.Lock()
+	defer ws.peer.t.cl._mu.internal.Unlock()
 	if ws.peer.t.closed.IsSet() {
 		return nil
 	}

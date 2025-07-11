@@ -9,6 +9,7 @@ import (
 
 // It's probably possible to track whether the piece moves around in the btree to be more efficient
 // about triggering request updates.
+// IMPORTANT: Caller must hold the client lock (cl.lock()) before calling this function.
 func (t *Torrent) updatePieceRequestOrderPiece(pieceIndex int) (changed bool) {
 	if t.storage == nil {
 		return false
@@ -38,6 +39,8 @@ func (t *Torrent) clientPieceRequestOrderKey() clientPieceRequestOrderKeySumType
 	return clientPieceRequestOrderKey[storage.TorrentCapacity]{t.storage.Capacity}
 }
 
+// deletePieceRequestOrder removes all pieces from the piece request order.
+// IMPORTANT: Caller must hold the client lock (cl.lock()) before calling this function.
 func (t *Torrent) deletePieceRequestOrder() {
 	if t.storage == nil {
 		return
@@ -53,6 +56,8 @@ func (t *Torrent) deletePieceRequestOrder() {
 	}
 }
 
+// initPieceRequestOrder initializes the piece request order for the torrent.
+// IMPORTANT: Caller must hold the client lock (cl.lock()) before calling this function.
 func (t *Torrent) initPieceRequestOrder() {
 	if t.storage == nil {
 		return
