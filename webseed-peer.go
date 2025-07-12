@@ -73,7 +73,10 @@ func (ws *webseedPeer) _cancel(r RequestIndex) bool {
 }
 
 func (ws *webseedPeer) intoSpec(r Request) webseed.RequestSpec {
-	return webseed.RequestSpec{ws.peer.t.requestOffset(r), int64(r.Length)}
+	return webseed.RequestSpec{
+		Start:  ws.peer.t.requestOffset(r),
+		Length: int64(r.Length),
+	}
 }
 
 func (ws *webseedPeer) _request(r Request) bool {
@@ -226,6 +229,12 @@ func (ws *webseedPeer) requestResultHandler(r Request, webseedRequest webseed.Re
 			return errors.New("invalid reject")
 		}
 		return err
+	}
+	// Before delivering the chunk, ensure we're not marked as requesting it
+	reqIndex := ws.peer.t.requestIndexFromRequest(r)
+	if ws.peer.t.requestingPeer(reqIndex) == &ws.peer {
+		// Remove ourselves from the global request state to avoid panic
+		delete(ws.peer.t.requestState, reqIndex)
 	}
 	err = ws.peer.receiveChunkFromWebseed(&pp.Message{
 		Type:  pp.Piece,
