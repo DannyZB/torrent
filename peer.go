@@ -746,9 +746,14 @@ func (c *Peer) receiveChunkImpl(msg *pp.Message, msgTime time.Time, immediate bo
 	// Cancel pending requests for this chunk from *other* peers.
 	if p := t.requestingPeer(req); p != nil {
 		if p == c {
-			panic("should not be pending request from conn that just received it")
+			// Webseed peers handle requests differently - they fetch and deliver in the same flow
+			if _, isWebseed := c.legacyPeerImpl.(*webseedPeer); !isWebseed {
+				panic("should not be pending request from conn that just received it")
+			}
+			// For webseed, we're both the requester and deliverer, which is expected
+		} else {
+			p.cancel(req)
 		}
-		p.cancel(req)
 	}
 
 	err = func() error {
@@ -838,7 +843,12 @@ func (c *Peer) deleteRequest(r RequestIndex) bool {
 	}
 	c.updateExpectingChunks()
 	if c.t.requestingPeer(r) != c {
-		panic("only one peer should have a given request at a time")
+		// Webseed peers might have already been removed from requestState by receiveChunkImpl
+		if _, isWebseed := c.legacyPeerImpl.(*webseedPeer); !isWebseed {
+			panic("only one peer should have a given request at a time")
+		}
+		// For webseed, the request might have been handled already
+		return true
 	}
 	delete(c.t.requestState, r)
 	// c.t.iterPeers(func(p *Peer) {
@@ -897,7 +907,7 @@ func (c *Peer) remoteIp() net.IP {
 
 func (c *Peer) remoteIpPort() IpPort {
 	ipa, _ := tryIpPortFromNetAddr(c.RemoteAddr)
-	return IpPort{ipa.IP, uint16(ipa.Port)}
+	return IpPort{IP: ipa.IP, Port: uint16(ipa.Port)}
 }
 
 func (c *Peer) trust() connectionTrust {

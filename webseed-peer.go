@@ -205,7 +205,13 @@ func (ws *webseedPeer) requestResultHandler(r Request, webseedRequest webseed.Re
 	}
 	ws.peer.readBytes(int64(len(result.Bytes)))
 	ws.peer.t.cl._mu.internal.Lock()
-	defer ws.peer.t.cl._mu.internal.Unlock()
+	// Note: receiveChunkImpl will unlock and re-lock the mutex, so we must not defer unlock here
+	lockHeld := true
+	defer func() {
+		if lockHeld {
+			ws.peer.t.cl._mu.internal.Unlock()
+		}
+	}()
 	if ws.peer.t.closed.IsSet() {
 		return nil
 	}
@@ -230,18 +236,16 @@ func (ws *webseedPeer) requestResultHandler(r Request, webseedRequest webseed.Re
 		}
 		return err
 	}
-	// Before delivering the chunk, ensure we're not marked as requesting it
-	reqIndex := ws.peer.t.requestIndexFromRequest(r)
-	if ws.peer.t.requestingPeer(reqIndex) == &ws.peer {
-		// Remove ourselves from the global request state to avoid panic
-		delete(ws.peer.t.requestState, reqIndex)
-	}
+	// receiveChunkImpl will unlock and re-lock the mutex internally
+	lockHeld = false
 	err = ws.peer.receiveChunkFromWebseed(&pp.Message{
 		Type:  pp.Piece,
 		Index: r.Index,
 		Begin: r.Begin,
 		Piece: result.Bytes,
 	}, time.Now())
+	// After receiveChunkFromWebseed, the lock is held again
+	lockHeld = true
 	if err != nil {
 		ws.peer.logger.Printf("error receiving chunk for request %v: %v", r, err)
 		return err
