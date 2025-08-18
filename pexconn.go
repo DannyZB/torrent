@@ -42,6 +42,10 @@ func (s *pexConnState) Init(c *PeerConn) {
 	if !ok || xid == 0 || c.t.cl.config.DisablePEX {
 		return
 	}
+	// Check private flag before enabling PEX (BEP 27)
+	if c.t.info != nil && c.t.info.Private != nil && *c.t.info.Private {
+		return // Don't enable PEX for private torrents
+	}
 	s.xid = xid
 	s.last = nil
 	s.torrent = c.t
@@ -57,6 +61,10 @@ func (s *pexConnState) Init(c *PeerConn) {
 
 // schedule next PEX message
 func (s *pexConnState) sched(delay time.Duration) {
+	// Check if torrent became private (BEP 27)
+	if s.torrent != nil && s.torrent.info != nil && s.torrent.info.Private != nil && *s.torrent.info.Private {
+		return // Don't schedule PEX for private torrents
+	}
 	s.timer.Reset(delay)
 }
 
@@ -80,6 +88,10 @@ func (s *pexConnState) numPending() int {
 // Share is called from the writer goroutine if when it is woken up with the write buffers empty
 // Returns whether there's more room on the send buffer to write to.
 func (s *pexConnState) Share(postfn messageWriter) bool {
+	// Check if torrent became private (BEP 27)
+	if s.torrent.info != nil && s.torrent.info.Private != nil && *s.torrent.info.Private {
+		return true // Don't send PEX for private torrents
+	}
 	select {
 	case <-s.gate:
 		if tx := s.genmsg(); tx != nil {
@@ -146,7 +158,7 @@ func (s *pexConnState) Recv(payload []byte) error {
 		return nil
 	}
 	// Check private flag before adding PEX peers (BEP 27)
-	if s.torrent.info.Private != nil && *s.torrent.info.Private {
+	if s.torrent.info != nil && s.torrent.info.Private != nil && *s.torrent.info.Private {
 		s.logger.Printf("ignoring %v PEX peers for private torrent", len(peers))
 		return nil
 	}
