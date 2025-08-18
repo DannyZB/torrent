@@ -2228,6 +2228,11 @@ func (t *Torrent) consumeDhtAnnouncePeers(pvs <-chan dht.PeersValues) {
 	cl := t.cl
 	for v := range pvs {
 		cl.lock()
+		// Check private flag before adding DHT peers (BEP 27)
+		if t.info != nil && t.info.Private != nil && *t.info.Private {
+			cl.unlock()
+			continue // Skip DHT peers for private torrents
+		}
 		added := 0
 		for _, cp := range v.Peers {
 			if cp.Port == 0 {
@@ -2305,6 +2310,10 @@ func (t *Torrent) dhtAnnounceConsumer(
 }
 
 func (t *Torrent) timeboxedAnnounceToDht(s DhtServer) error {
+	// Check private flag before announcing (BEP 27)
+	if t.info != nil && t.info.Private != nil && *t.info.Private {
+		return nil // Silently skip for private torrents
+	}
 	_, stop, err := t.AnnounceToDht(s)
 	if err != nil {
 		return err
@@ -2325,6 +2334,10 @@ func (t *Torrent) dhtAnnouncer(s DhtServer) {
 		for {
 			if t.closed.IsSet() {
 				return
+			}
+			// Check private flag if we have metadata (BEP 27)
+			if t.info != nil && t.info.Private != nil && *t.info.Private {
+				return // Exit permanently for private torrents
 			}
 			// We're also announcing ourselves as a listener, so we don't just want peer addresses.
 			// TODO: We can include the announce_peer step depending on whether we can receive
@@ -2515,7 +2528,10 @@ func (t *Torrent) addPeerConn(c *PeerConn) (err error) {
 	t.cl.event.Broadcast()
 	// We'll never receive the "p" extended handshake parameter.
 	if !t.cl.config.DisablePEX && !c.PeerExtensionBytes.SupportsExtended() {
-		t.pex.Add(c)
+		// Check private flag before adding to PEX (BEP 27)
+		if t.info.Private == nil || !*t.info.Private {
+			t.pex.Add(c)
+		}
 	}
 	return nil
 }

@@ -1728,6 +1728,10 @@ func (cl *Client) onDHTAnnouncePeer(ih metainfo.Hash, ip net.IP, port int, portO
 	if t == nil {
 		return
 	}
+	// Check private flag before accepting DHT announce_peer (BEP 27)
+	if t.info != nil && t.info.Private != nil && *t.info.Private {
+		return // Ignore DHT announce_peer for private torrents
+	}
 	t.addPeers([]PeerInfo{{
 		Addr:   ipPortAddr{ip, port},
 		Source: PeerSourceDhtAnnouncePeer,

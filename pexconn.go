@@ -145,6 +145,11 @@ func (s *pexConnState) Recv(payload []byte) error {
 		s.logger.Printf("in cooldown period, incoming PEX discarded")
 		return nil
 	}
+	// Check private flag before adding PEX peers (BEP 27)
+	if s.torrent.info.Private != nil && *s.torrent.info.Private {
+		s.logger.Printf("ignoring %v PEX peers for private torrent", len(peers))
+		return nil
+	}
 	added := s.torrent.addPeers(peers)
 	s.logger.Printf("got %v peers over pex, added %v", len(peers), added)
 

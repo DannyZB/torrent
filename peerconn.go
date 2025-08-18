@@ -997,9 +997,12 @@ func (c *PeerConn) onReadExtendedMsg(id pp.ExtensionNumber, payload []byte) (err
 		}
 		c.requestPendingMetadata()
 		if !t.cl.config.DisablePEX {
-			t.pex.Add(c) // we learnt enough now
-			// This checks the extension is supported internally.
-			c.pex.Init(c)
+			// Check private flag before enabling PEX (BEP 27)
+			if t.info.Private == nil || !*t.info.Private {
+				t.pex.Add(c) // we learnt enough now
+				// This checks the extension is supported internally.
+				c.pex.Init(c)
+			}
 		}
 		return nil
 	}
