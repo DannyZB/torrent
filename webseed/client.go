@@ -73,6 +73,7 @@ type RequestResult struct {
 func (ws *Client) StartNewRequest(r RequestSpec) Request {
 	ctx, cancel := context.WithCancel(context.TODO())
 	var requestParts []requestPart
+	var requestError error
 	
 	// Clean the URL
 	cleanUrl := strings.TrimSpace(ws.Url)
@@ -85,7 +86,8 @@ func (ws *Client) StartNewRequest(r RequestSpec) Request {
 			ws.PathEscaper,
 		)
 		if err != nil {
-			panic(err)
+			requestError = err
+			return false
 		}
 		part := requestPart{
 			req:                 req,
@@ -97,14 +99,21 @@ func (ws *Client) StartNewRequest(r RequestSpec) Request {
 		}
 		requestParts = append(requestParts, part)
 		return true
-	}) {
+	}) && requestError == nil {
 		panic("request out of file bounds")
 	}
+	
 	req := Request{
 		cancel: cancel,
 		Result: make(chan RequestResult, 1),
 	}
 	go func() {
+		if requestError != nil {
+			req.Result <- RequestResult{
+				Err: fmt.Errorf("invalid webseed URL: %w", requestError),
+			}
+			return
+		}
 		b, err := readRequestPartResponses(ctx, requestParts)
 		req.Result <- RequestResult{
 			Bytes: b,
