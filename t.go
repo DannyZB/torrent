@@ -38,6 +38,12 @@ func (t *Torrent) NewReader() Reader {
 	return t.newReader(0, t.length())
 }
 
+// NewPassiveReader creates a reader that avoids triggering piece priority updates while consuming
+// data that is already available.
+func (t *Torrent) NewPassiveReader() Reader {
+	return t.newPassiveReader(0, t.length())
+}
+
 func (t *Torrent) newReader(offset, length int64) Reader {
 	r := reader{
 		mu:     t.cl.locker(),
@@ -45,6 +51,20 @@ func (t *Torrent) newReader(offset, length int64) Reader {
 		offset: offset,
 		length: length,
 		ctx:    context.Background(),
+	}
+	r.readaheadFunc = defaultReadaheadFunc
+	t.addReader(&r)
+	return &r
+}
+
+func (t *Torrent) newPassiveReader(offset, length int64) Reader {
+	r := reader{
+		mu:      t.cl.locker(),
+		t:       t,
+		offset:  offset,
+		length:  length,
+		ctx:     context.Background(),
+		passive: true,
 	}
 	r.readaheadFunc = defaultReadaheadFunc
 	t.addReader(&r)

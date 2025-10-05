@@ -113,10 +113,14 @@ func (ws *Client) StartNewRequest(ctx context.Context, r RequestSpec, debugLogge
 	var requestParts []requestPart
 	panicif.Nil(ws.fileIndex)
 	panicif.Nil(ws.info)
+	baseURL := strings.TrimSpace(ws.Url)
+	if baseURL == "" {
+		baseURL = ws.Url
+	}
 	for i, e := range ws.fileIndex.LocateIter(r) {
 		req, err := newRequest(
 			ctx,
-			ws.Url, i, ws.info, e.Start, e.Length,
+			baseURL, i, ws.info, e.Start, e.Length,
 			ws.PathEscaper,
 		)
 		panicif.Err(err)

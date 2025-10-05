@@ -374,10 +374,13 @@ func (me webseedRequestOrderValue) String() string {
 func (cl *Client) iterPossibleWebseedRequests() iter.Seq2[webseedUniqueRequestKey, aprioriMapValue] {
 	return func(yield func(webseedUniqueRequestKey, aprioriMapValue) bool) {
 		for key, value := range cl.pieceRequestOrder {
+			if value == nil {
+				continue
+			}
 			input := key.getRequestStrategyInput(cl)
 			if !requestStrategy.GetRequestablePieces(
 				input,
-				value.pieces,
+				value,
 				func(ih metainfo.Hash, pieceIndex int, orderState requestStrategy.PieceRequestOrderState) bool {
 					t := cl.torrentsByShortHash[ih]
 					if len(t.webSeeds) == 0 {

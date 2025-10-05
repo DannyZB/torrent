@@ -37,6 +37,17 @@ type webseedPeer struct {
 	// When requests are allowed to resume. If Zero, then anytime.
 	penanceComplete time.Time
 	lastCrime       error
+
+	// Channel-based requester coordination to honour legacy fork behaviour.
+	requesterWakeup chan struct{}
+	requesterClosed chan struct{}
+	requestQueue    []webseedRequestSpawn
+}
+
+type webseedRequestSpawn struct {
+	begin  RequestIndex
+	end    RequestIndex
+	logger *slog.Logger
 }
 
 func (me *webseedPeer) suspended() bool {
@@ -140,39 +151,151 @@ func (ws *webseedPeer) intoSpec(begin, end RequestIndex) webseed.RequestSpec {
 	return webseed.RequestSpec{start, endOff - start}
 }
 
-func (ws *webseedPeer) spawnRequest(begin, end RequestIndex, logger *slog.Logger) {
-	extWsReq := ws.client.StartNewRequest(ws.peer.closedCtx, ws.intoSpec(begin, end), logger)
-	wsReq := webseedRequest{
-		logger:  logger,
-		request: extWsReq,
-		begin:   begin,
-		next:    begin,
-		end:     end,
+func (ws *webseedPeer) initRequesters() {
+	if ws.requesterWakeup != nil {
+		return
 	}
-	if ws.hasOverlappingRequests(begin, end) {
+	max := ws.client.MaxRequests
+	if max <= 0 {
+		max = 1
+	}
+	ws.requesterWakeup = make(chan struct{}, max)
+	ws.requesterClosed = make(chan struct{})
+	ws.requestQueue = make([]webseedRequestSpawn, 0, max)
+	for i := 0; i < max; i++ {
+		go ws.requesterLoop(i)
+	}
+}
+
+func (ws *webseedPeer) signalRequester() {
+	select {
+	case ws.requesterWakeup <- struct{}{}:
+	default:
+	}
+}
+
+func (ws *webseedPeer) enqueueRequestSpawn(begin, end RequestIndex, logger *slog.Logger) {
+	ws.locker.Lock()
+	if ws.requesterWakeup == nil {
+		ws.locker.Unlock()
+		return
+	}
+	ws.requestQueue = append(ws.requestQueue, webseedRequestSpawn{
+		begin:  begin,
+		end:    end,
+		logger: logger,
+	})
+	ws.locker.Unlock()
+	ws.signalRequester()
+}
+
+func (ws *webseedPeer) closeRequesters() {
+	if ws.requesterClosed == nil {
+		return
+	}
+	select {
+	case <-ws.requesterClosed:
+		// Already closed.
+	default:
+		close(ws.requesterClosed)
+	}
+	ws.locker.Lock()
+	ws.requesterWakeup = nil
+	ws.locker.Unlock()
+}
+
+func (ws *webseedPeer) requesterLoop(index int) {
+	for {
+		select {
+		case <-ws.requesterWakeup:
+		case <-ws.requesterClosed:
+			return
+		case <-ws.peer.closed.Done():
+			return
+		}
+		for {
+			ws.locker.Lock()
+			if len(ws.requestQueue) == 0 {
+				ws.locker.Unlock()
+				break
+			}
+			spawn := ws.requestQueue[0]
+			ws.requestQueue = ws.requestQueue[1:]
+			ws.locker.Unlock()
+			if ws.peer.closed.IsSet() {
+				return
+			}
+			ws.processRequestSpawn(index, spawn)
+		}
+	}
+}
+
+func (ws *webseedPeer) processRequestSpawn(requesterIndex int, spawn webseedRequestSpawn) {
+	if spawn.end <= spawn.begin {
+		return
+	}
+	// Honour suspension before issuing the request.
+	for ws.suspended() {
+		wait := time.Until(ws.penanceComplete)
+		if wait <= 0 {
+			break
+		}
+		timer := time.NewTimer(wait)
+		select {
+		case <-timer.C:
+		case <-ws.peer.closed.Done():
+			timer.Stop()
+			return
+		case <-ws.requesterClosed:
+			timer.Stop()
+			return
+		}
+	}
+	extWsReq := ws.client.StartNewRequest(ws.peer.closedCtx, ws.intoSpec(spawn.begin, spawn.end), spawn.logger)
+	wsReq := &webseedRequest{
+		logger:  spawn.logger,
+		request: extWsReq,
+		begin:   spawn.begin,
+		next:    spawn.begin,
+		end:     spawn.end,
+	}
+	ws.locker.Lock()
+	if ws.hasOverlappingRequests(spawn.begin, spawn.end) {
 		if webseed.PrintDebug {
-			logger.Warn(
+			spawn.logger.Warn(
 				"webseedPeer.spawnRequest: request overlaps existing",
-				"new", &wsReq,
+				"new", wsReq,
 				"torrent", ws.peer.t)
 		}
 		ws.peer.t.cl.dumpCurrentWebseedRequests()
 	}
-	ws.activeRequests[&wsReq] = struct{}{}
+	ws.activeRequests[wsReq] = struct{}{}
 	t := ws.peer.t
 	cl := t.cl
 	g.MakeMapIfNil(&cl.activeWebseedRequests)
-	g.MapMustAssignNew(cl.activeWebseedRequests, ws.getRequestKey(&wsReq), &wsReq)
+	g.MapMustAssignNew(cl.activeWebseedRequests, ws.getRequestKey(wsReq), wsReq)
 	ws.peer.updateExpectingChunks()
 	panicif.Zero(ws.hostKey)
-	ws.peer.t.cl.numWebSeedRequests[ws.hostKey]++
+	cl.numWebSeedRequests[ws.hostKey]++
+	ws.locker.Unlock()
 	ws.slogger().Debug(
 		"starting webseed request",
-		"begin", begin,
-		"end", end,
-		"len", end-begin,
+		"begin", spawn.begin,
+		"end", spawn.end,
+		"len", spawn.end-spawn.begin,
+		"requester", requesterIndex,
 	)
-	go ws.sliceProcessor(&wsReq)
+	go ws.sliceProcessor(wsReq)
+}
+
+func (ws *webseedPeer) spawnRequest(begin, end RequestIndex, logger *slog.Logger) {
+	if ws.requesterWakeup == nil {
+		// Requesters haven't been initialised yet; fall back to immediate execution to avoid losing
+		// the request. This should not normally happen because initRequesters is called during
+		// construction.
+		ws.initRequesters()
+	}
+	ws.enqueueRequestSpawn(begin, end, logger)
 }
 
 func (me *webseedPeer) getRequestKey(wr *webseedRequest) webseedUniqueRequestKey {
@@ -235,7 +358,7 @@ func (ws *webseedPeer) sliceProcessor(webseedRequest *webseedRequest) {
 	if err != nil {
 		level := ws.readChunksErrorLevel(err, webseedRequest)
 		ws.slogger().Log(context.TODO(), level, "webseed request error", "err", err)
-		torrent.Add("webseed request error count", 1)
+		addMetric("webseed request error count", 1)
 		// This used to occur only on webseed.ErrTooFast but I think it makes sense to slow down any
 		// kind of error. Pausing here will starve the available requester slots which slows things
 		// down. TODO: Use the Retry-After implementation from Erigon.
@@ -277,6 +400,10 @@ func (cn *webseedPeer) providedBadData() {
 }
 
 func (ws *webseedPeer) onClose() {
+	ws.closeRequesters()
+	ws.locker.Lock()
+	ws.requestQueue = nil
+	ws.locker.Unlock()
 	ws.peer.t.iterPeers(func(p *Peer) {
 		if p.isLowOnRequests() {
 			p.onNeedUpdateRequests("webseedPeer.onClose")
@@ -349,7 +476,7 @@ func (ws *webseedPeer) readChunks(wr *webseedRequest) (err error) {
 		// Ensure the request is pointing to the next chunk before receiving the current one. If
 		// webseed requests are triggered, we want to ensure our existing request is up to date.
 		wr.next++
-		err = ws.peer.receiveChunk(&msg)
+		err = ws.peer.receiveChunk(&msg, time.Now())
 		stop := err != nil || wr.next >= wr.end
 		if !stop {
 			if !ws.wantedChunksInDiscardWindow(wr) {

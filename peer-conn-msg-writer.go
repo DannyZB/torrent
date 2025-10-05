@@ -89,7 +89,7 @@ func (cn *peerConnMsgWriter) run(keepAliveTimeout time.Duration) {
 		cn.mu.Lock()
 		if cn.writeBuffer.Len() == 0 && time.Since(lastWrite) >= keepAliveTimeout && keepAlive {
 			cn.writeBuffer.Write(pp.Message{Keepalive: true}.MustMarshalBinary())
-			torrent.Add("written keepalives", 1)
+			addMetric("written keepalives", 1)
 		}
 		if cn.writeBuffer.Len() == 0 {
 			writeCond := cn.writeCond.Signaled()

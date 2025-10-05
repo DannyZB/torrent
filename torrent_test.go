@@ -2,6 +2,7 @@ package torrent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -221,6 +222,56 @@ func TestTorrentMetainfoIncompleteMetadata(t *testing.T) {
 	assert.Equal(t, make([]byte, len(mi.InfoBytes)), tt.metadataBytes)
 	assert.False(t, tt.haveAllMetadataPieces())
 	assert.Nil(t, tt.Metainfo().InfoBytes)
+}
+
+func TestTrackerStatusErrorType(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  string
+		want string
+	}{
+		{"no error", "", ""},
+		{"http 404", "response from tracker: 404 Not Found", "tracker_not_found"},
+		{"http 503", "response from tracker: 503 Service Unavailable", "tracker_unavailable"},
+		{"auth", "response from tracker: 401 Unauthorized", "authentication_failed"},
+		{"tracker failure", "tracker gave failure reason: torrent not registered", "torrent_not_registered"},
+		{"passkey", "tracker gave failure reason: passkey invalid", "authentication_failed"},
+		{"dns", "error getting ip: lookup failed", "dns_error"},
+		{"timeout", "context deadline exceeded", "timeout"},
+		{"cancel", "context canceled", "cancelled"},
+		{"network", "dial tcp: connection refused", "network_error"},
+		{"udp", "Connection ID missmatch", "udp_connection_error"},
+		{"unknown", "some other error", "unknown_error"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			status := TrackerStatus{}
+			if tc.err != "" {
+				status.LastError = errors.New(tc.err)
+			}
+			got := status.ErrorType()
+			if got != tc.want {
+				t.Fatalf("got %q want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCheckPendingPiecesDownloadDisabled(t *testing.T) {
+	cl := newTestingClient(t)
+	tor := cl.newTorrentForTesting()
+	require.NoError(t, tor.setInfoUnlocked(&metainfo.Info{
+		Pieces:      make([]byte, metainfo.HashSize),
+		PieceLength: 1 << 18,
+		Length:      1 << 18,
+	}))
+	cl.lock()
+	tor.initPieceRequestOrder()
+	tor._pendingPieces.Add(0)
+	tor.dataDownloadDisallowed.Set()
+	cl.unlock()
+	require.NotPanics(t, func() {
+		tor.checkPendingPiecesMatchesRequestOrder()
+	})
 }
 
 func TestRelativeAvailabilityHaveNone(t *testing.T) {

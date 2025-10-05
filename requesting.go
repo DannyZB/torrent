@@ -190,7 +190,10 @@ type desiredRequestState struct {
 
 func (cl *Client) getRequestablePieces(key clientPieceRequestOrderKeySumType, f requestStrategy.RequestPieceFunc) {
 	input := key.getRequestStrategyInput(cl)
-	order := cl.pieceRequestOrder[key].pieces
+	order := cl.pieceRequestOrder[key]
+	if order == nil {
+		return
+	}
 	requestStrategy.GetRequestablePieces(input, order, f)
 }
 
@@ -295,6 +298,7 @@ func (p *PeerConn) updateRequestsWithReason(reason updateRequestReason) {
 	// called with this reason?
 	p.needRequestUpdate = ""
 	p.lastRequestUpdate = time.Now()
+	p.piecesReceivedSinceLastRequestUpdate = 0
 	if enableUpdateRequestsTimer {
 		p.updateRequestsTimer.Reset(updateRequestsTimerDuration)
 	}

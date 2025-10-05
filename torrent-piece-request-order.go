@@ -15,21 +15,21 @@ func (t *Torrent) updatePieceRequestOrderPiece(pieceIndex int) (changed bool) {
 		return false
 	}
 	pro, ok := t.cl.pieceRequestOrder[t.clientPieceRequestOrderKey()]
-	if !ok {
+	if !ok || pro == nil {
 		return false
 	}
 	key := t.pieceRequestOrderKey(pieceIndex)
 	if t.hasStorageCap() {
-		return pro.pieces.Update(key, t.requestStrategyPieceOrderState(pieceIndex))
+		return pro.Update(key, t.requestStrategyPieceOrderState(pieceIndex))
 	}
 	// TODO: This might eject a piece that could count toward being unverified?
 	pending := !t.ignorePieceForRequests(pieceIndex)
 	if pending {
 		newState := t.requestStrategyPieceOrderState(pieceIndex)
-		old := pro.pieces.Add(key, newState)
+		old := pro.Add(key, newState)
 		return old.Ok && old.Value != newState
 	} else {
-		return pro.pieces.Delete(key)
+		return pro.Delete(key)
 	}
 }
 
@@ -47,11 +47,13 @@ func (t *Torrent) deletePieceRequestOrder() {
 	cpro := t.cl.pieceRequestOrder
 	key := t.clientPieceRequestOrderKey()
 	pro := cpro[key]
-	for i := range t.numPieces() {
-		pro.pieces.Delete(t.pieceRequestOrderKey(i))
+	if pro == nil {
+		return
 	}
-	delete(pro.torrents, t)
-	if pro.pieces.Len() == 0 {
+	for i := 0; i < t.numPieces(); i++ {
+		pro.Delete(t.pieceRequestOrderKey(i))
+	}
+	if pro.Len() == 0 {
 		delete(cpro, key)
 	}
 }
@@ -63,14 +65,9 @@ func (t *Torrent) initPieceRequestOrder() {
 	g.MakeMapIfNil(&t.cl.pieceRequestOrder)
 	key := t.clientPieceRequestOrderKey()
 	cpro := t.cl.pieceRequestOrder
-	if _, ok := cpro[key]; !ok {
-		value := clientPieceRequestOrderValue{
-			pieces: requestStrategy.NewPieceOrder(requestStrategy.NewAjwernerBtree(), t.numPieces()),
-		}
-		g.MakeMap(&value.torrents)
-		cpro[key] = value
+	if cpro[key] == nil {
+		cpro[key] = requestStrategy.NewPieceOrder(requestStrategy.NewAjwernerBtree(), t.numPieces())
 	}
-	g.MapMustAssignNew(cpro[key].torrents, t, struct{}{})
 }
 
 func (t *Torrent) addRequestOrderPiece(i int) {
@@ -78,6 +75,9 @@ func (t *Torrent) addRequestOrderPiece(i int) {
 		return
 	}
 	pro := t.getPieceRequestOrder()
+	if pro == nil {
+		return
+	}
 	key := t.pieceRequestOrderKey(i)
 	if t.hasStorageCap() || !t.ignorePieceForRequests(i) {
 		pro.Add(key, t.requestStrategyPieceOrderState(i))
@@ -88,13 +88,20 @@ func (t *Torrent) getPieceRequestOrder() *requestStrategy.PieceRequestOrder {
 	if t.storage == nil {
 		return nil
 	}
-	return t.cl.pieceRequestOrder[t.clientPieceRequestOrderKey()].pieces
+	return t.cl.pieceRequestOrder[t.clientPieceRequestOrderKey()]
 }
 
 func (t *Torrent) checkPendingPiecesMatchesRequestOrder() {
 	short := *t.canonicalShortInfohash()
 	var proBitmap roaring.Bitmap
-	for item := range t.getPieceRequestOrder().Iter() {
+	pro := t.getPieceRequestOrder()
+	if pro == nil {
+		return
+	}
+	if t.dataDownloadDisallowed.Bool() {
+		return
+	}
+	for item := range pro.Iter() {
 		if item.Key.InfoHash.Value() != short {
 			continue
 		}

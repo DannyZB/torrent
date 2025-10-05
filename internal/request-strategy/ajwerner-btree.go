@@ -23,19 +23,12 @@ func NewAjwernerBtree() *ajwernerBtree {
 	}
 }
 
-func mustValue[V any](b bool, panicValue V) {
-	if !b {
-		panic(panicValue)
-	}
-}
-
 func (a *ajwernerBtree) Delete(item PieceRequestOrderItem) {
-	mustValue(a.btree.Delete(item), item)
+	a.btree.Delete(item)
 }
 
 func (a *ajwernerBtree) Add(item PieceRequestOrderItem) {
-	_, overwrote := a.btree.Upsert(item)
-	mustValue(!overwrote, item)
+	a.btree.Upsert(item)
 }
 
 func (a *ajwernerBtree) Scan(f func(PieceRequestOrderItem) bool) {

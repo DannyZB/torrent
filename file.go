@@ -188,6 +188,11 @@ func (f *File) NewReader() Reader {
 	return f.t.newReader(f.Offset(), f.Length())
 }
 
+// NewPassiveReader returns a reader that avoids altering piece priorities while consuming data.
+func (f *File) NewPassiveReader() Reader {
+	return f.t.newPassiveReader(f.Offset(), f.Length())
+}
+
 // Sets the minimum priority for pieces in the File.
 func (f *File) SetPriority(prio PiecePriority) {
 	f.t.cl.lock()

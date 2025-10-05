@@ -1,8 +1,16 @@
 package torrent
 
-import (
-	"expvar"
-)
+import "expvar"
+
+// debugMetricsEnabled toggles high-frequency metric updates. Enabled via ClientConfig.Debug.
+var debugMetricsEnabled bool
+
+func addMetric(name string, delta int64) {
+	if !debugMetricsEnabled {
+		return
+	}
+	torrent.Add(name, delta)
+}
 
 func init() {
 	torrent.Set("peers supporting extension", &peersSupportingExtension)

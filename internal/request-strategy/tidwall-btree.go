@@ -40,3 +40,9 @@ func (me *tidwallBtree) Contains(item PieceRequestOrderItem) bool {
 	_, ok := me.tree.Get(item)
 	return ok
 }
+
+func mustValue[V any](b bool, panicValue V) {
+	if !b {
+		panic(panicValue)
+	}
+}

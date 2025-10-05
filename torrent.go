@@ -74,6 +74,10 @@ type Torrent struct {
 	logger   log.Logger
 	_slogger *slog.Logger
 
+	statsCacheMu   sync.RWMutex
+	statsCache     TorrentStats
+	statsCacheTime time.Time
+
 	networkingEnabled      chansync.Flag
 	dataDownloadDisallowed chansync.Flag
 	dataUploadDisallowed   bool
@@ -157,7 +161,7 @@ type Torrent struct {
 	// Each element corresponds to the 16KiB metadata pieces. If true, we have
 	// received that piece.
 	metadataCompletedChunks []bool
-	metadataChanged         sync.Cond
+	metadataChanged         *compatCond
 
 	// Closed when .Info is obtained. This could be chansync.SetOnce but we already have sync around
 	// IsSet from nameMu. Switching will probably only increase memory use.
@@ -349,19 +353,19 @@ func (t *Torrent) appendConns(ret []*PeerConn, f func(*PeerConn) bool) []*PeerCo
 
 func (t *Torrent) addPeer(p PeerInfo) (added bool) {
 	cl := t.cl
-	torrent.Add(fmt.Sprintf("peers added by source %q", p.Source), 1)
+	addMetric(fmt.Sprintf("peers added by source %q", p.Source), 1)
 	if t.closed.IsSet() {
 		return false
 	}
 	if ipAddr, ok := tryIpPortFromNetAddr(p.Addr); ok {
 		if cl.badPeerIPPort(ipAddr.IP, ipAddr.Port) {
-			torrent.Add("peers not added because of bad addr", 1)
+			addMetric("peers not added because of bad addr", 1)
 			// cl.logger.Printf("peers not added because of bad addr: %v", p)
 			return false
 		}
 	}
 	if replaced, ok := t.peers.AddReturningReplacedPeer(p); ok {
-		torrent.Add("peers replaced", 1)
+		addMetric("peers replaced", 1)
 		if !replaced.equal(p) {
 			t.logger.WithDefaultLevel(log.Debug).Printf("added %v replacing %v", p, replaced)
 			added = true
@@ -373,7 +377,7 @@ func (t *Torrent) addPeer(p PeerInfo) (added bool) {
 	for t.peers.Len() > cl.config.TorrentPeersHighWater {
 		_, ok := t.peers.DeleteMin()
 		if ok {
-			torrent.Add("excess reserve peers discarded", 1)
+			addMetric("excess reserve peers discarded", 1)
 		}
 	}
 	return
@@ -1231,8 +1235,8 @@ func (t *Torrent) countBytesHashed(n int64) {
 
 func (t *Torrent) hashPiece(piece pieceIndex) (
 	correct bool,
-// These are peers that sent us blocks that differ from what we hash here. TODO: Track Peer not
-// bannable addr for peer types that are rebuked differently.
+	// These are peers that sent us blocks that differ from what we hash here. TODO: Track Peer not
+	// bannable addr for peer types that are rebuked differently.
 	differingPeers map[bannableAddr]struct{},
 	err error,
 ) {
@@ -1306,7 +1310,7 @@ func sumExactly(dst []byte, sum func(b []byte) []byte) {
 }
 
 func (t *Torrent) hashPieceWithSpecificHash(piece pieceIndex, h hash.Hash) (
-// These are peers that sent us blocks that differ from what we hash here.
+	// These are peers that sent us blocks that differ from what we hash here.
 	differingPeers map[bannableAddr]struct{},
 	err error,
 ) {
@@ -1350,8 +1354,8 @@ func (t *Torrent) havePiece(index pieceIndex) bool {
 }
 
 func (t *Torrent) maybeDropMutuallyCompletePeer(
-// I'm not sure about taking peer here, not all peer implementations actually drop. Maybe that's
-// okay?
+	// I'm not sure about taking peer here, not all peer implementations actually drop. Maybe that's
+	// okay?
 	p *PeerConn,
 ) {
 	if !t.cl.config.DropMutuallyCompletePeers {
@@ -1926,7 +1930,7 @@ func (t *Torrent) deletePeerConn(c *PeerConn) (ret bool) {
 			t.pex.Drop(c)
 		}
 	}
-	torrent.Add("deleted connections", 1)
+	addMetric("deleted connections", 1)
 	c.deleteAllRequests("Torrent.deletePeerConn")
 	if len(t.conns) == 0 {
 		panicif.NotZero(len(t.requestState))
@@ -2162,7 +2166,7 @@ func (t *Torrent) startScrapingTrackerWithInfohash(u *url.URL, urlStr string, sh
 			t:               t,
 			lookupTrackerIp: t.cl.config.LookupTrackerIp,
 			stopCh:          make(chan struct{}),
-			logger:          t.slogger().With("name", "tracker", "urlKey", u.String()),
+			originalUrl:     u.String(),
 		}
 		go newAnnouncer.Run()
 		return newAnnouncer
@@ -2228,6 +2232,11 @@ func (t *Torrent) consumeDhtAnnouncePeers(pvs <-chan dht.PeersValues) {
 	cl := t.cl
 	for v := range pvs {
 		cl.lock()
+		// Private torrents must not learn peers from DHT (BEP 27)
+		if t.info != nil && t.info.Private != nil && *t.info.Private {
+			cl.unlock()
+			continue
+		}
 		added := 0
 		for _, cp := range v.Peers {
 			if cp.Port == 0 {
@@ -2305,6 +2314,10 @@ func (t *Torrent) dhtAnnounceConsumer(
 }
 
 func (t *Torrent) timeboxedAnnounceToDht(s DhtServer) error {
+	// DHT announce is forbidden for private torrents (BEP 27)
+	if t.info != nil && t.info.Private != nil && *t.info.Private {
+		return nil
+	}
 	_, stop, err := t.AnnounceToDht(s)
 	if err != nil {
 		return err
@@ -2326,6 +2339,9 @@ func (t *Torrent) dhtAnnouncer(s DhtServer) {
 			if t.closed.IsSet() {
 				return
 			}
+			if t.info != nil && t.info.Private != nil && *t.info.Private {
+				return
+			}
 			// We're also announcing ourselves as a listener, so we don't just want peer addresses.
 			// TODO: We can include the announce_peer step depending on whether we can receive
 			// inbound connections. We should probably only announce once every 15 mins too.
@@ -2339,6 +2355,10 @@ func (t *Torrent) dhtAnnouncer(s DhtServer) {
 			break
 		wait:
 			cl.event.Wait()
+			cl.unlock()
+			// Small jitter prevents thundering herd after wake-up
+			time.Sleep(time.Duration(rand.Int63n(int64(50 * time.Millisecond))))
+			cl.lock()
 		}
 		func() {
 			t.numDHTAnnounces++
@@ -2367,6 +2387,35 @@ func (t *Torrent) Stats() TorrentStats {
 	t.cl.rLock()
 	defer t.cl.rUnlock()
 	return t.statsLocked()
+}
+
+// CachedStats returns torrent stats using a short cache window to reduce lock contention during
+// frequent polling.
+func (t *Torrent) CachedStats() TorrentStats {
+	const cacheWindow = 200 * time.Millisecond
+
+	t.statsCacheMu.RLock()
+	cached := !t.statsCacheTime.IsZero() && time.Since(t.statsCacheTime) < cacheWindow
+	if cached {
+		stats := t.statsCache
+		t.statsCacheMu.RUnlock()
+		return stats
+	}
+	t.statsCacheMu.RUnlock()
+
+	t.statsCacheMu.Lock()
+	defer t.statsCacheMu.Unlock()
+	if !t.statsCacheTime.IsZero() && time.Since(t.statsCacheTime) < cacheWindow {
+		return t.statsCache
+	}
+
+	t.cl.rLock()
+	stats := t.statsLocked()
+	t.cl.rUnlock()
+
+	t.statsCache = stats
+	t.statsCacheTime = time.Now()
+	return stats
 }
 
 func (t *Torrent) gauges() (ret TorrentGauges) {
@@ -2415,7 +2464,7 @@ func (t *Torrent) numTotalPeers() int {
 func (t *Torrent) addPeerConn(c *PeerConn) (err error) {
 	defer func() {
 		if err == nil {
-			torrent.Add("added connections", 1)
+			addMetric("added connections", 1)
 		}
 	}()
 	if t.closed.IsSet() {
@@ -2457,7 +2506,9 @@ func (t *Torrent) addPeerConn(c *PeerConn) (err error) {
 	t.cl.event.Broadcast()
 	// We'll never receive the "p" extended handshake parameter.
 	if !t.cl.config.DisablePEX && !c.PeerExtensionBytes.SupportsExtended() {
-		t.pex.Add(c)
+		if t.info == nil || t.info.Private == nil || !*t.info.Private {
+			t.pex.Add(c)
+		} // PEX is disabled for private torrents (BEP 27)
 	}
 	return nil
 }
@@ -2562,8 +2613,12 @@ func (t *Torrent) pieceHashed(piece pieceIndex, passed bool, hashIoErr error) {
 	if passed {
 		t.incrementPiecesDirtiedStats(p, (*ConnStats).incrementPiecesDirtiedGood)
 		t.clearPieceTouchers(piece)
+		hasDirty := p.hasDirtyChunks()
 		t.cl.unlock()
 		p.race++
+		if hasDirty {
+			p.Flush()
+		}
 		err := p.Storage().MarkComplete()
 		if err != nil {
 			t.slogger().Error("error marking piece complete", "piece", piece, "err", err)
@@ -3145,6 +3200,7 @@ func (t *Torrent) addWebSeed(url string, opts ...AddWebSeedsOpt) bool {
 	if t.haveInfo() {
 		ws.onGotInfo(t.info)
 	}
+	ws.initRequesters()
 	g.MapMustAssignNew(t.webSeeds, urlKey, &ws)
 	ws.peer.onNeedUpdateRequests("Torrent.addWebSeed")
 	return true
@@ -3361,7 +3417,7 @@ func sendUtHolepunchMsg(
 }
 
 func incHolepunchMessages(msg utHolepunch.Msg, verb string) {
-	torrent.Add(
+	addMetric(
 		fmt.Sprintf(
 			"holepunch %v %v messages %v",
 			msg.MsgType,
@@ -3437,7 +3493,7 @@ func (t *Torrent) handleReceivedUtHolepunchMsg(msg utHolepunch.Msg, sender *Peer
 		initiateConn(opts, true)
 		return nil
 	case utHolepunch.Error:
-		torrent.Add("holepunch error messages received", 1)
+		addMetric("holepunch error messages received", 1)
 		t.logger.Levelf(log.Debug, "received ut_holepunch error message from %v: %v", sender, msg.ErrCode)
 		return nil
 	default:
@@ -3586,6 +3642,117 @@ func (t *Torrent) withSlogger(base *slog.Logger) *slog.Logger {
 	return base.With(slog.Group(
 		"torrent",
 		"ih", *t.canonicalShortInfohash()))
+}
+
+type TrackerStatus struct {
+	URL              string
+	Tier             int
+	LastError        error
+	LastAnnounce     time.Time
+	NumPeers         int
+	Seeders          int32
+	Leechers         int32
+	Interval         time.Duration
+	NextAnnounce     time.Time
+	ConsecutiveFails int
+}
+
+func (ts TrackerStatus) IsWorking() bool {
+	return ts.LastError == nil && !ts.LastAnnounce.IsZero()
+}
+
+func (ts TrackerStatus) ErrorType() string {
+	if ts.LastError == nil {
+		return ""
+	}
+	errStr := ts.LastError.Error()
+	switch {
+	case strings.Contains(errStr, "response from tracker"):
+		switch {
+		case strings.Contains(errStr, "404"), strings.Contains(errStr, "Not Found"):
+			return "tracker_not_found"
+		case strings.Contains(errStr, "503"), strings.Contains(errStr, "Service Unavailable"):
+			return "tracker_unavailable"
+		case strings.Contains(errStr, "401"), strings.Contains(errStr, "403"), strings.Contains(errStr, "Unauthorized"), strings.Contains(errStr, "Forbidden"):
+			return "authentication_failed"
+		default:
+			return "tracker_http_error"
+		}
+	case strings.Contains(errStr, "tracker gave failure reason"):
+		switch {
+		case strings.Contains(errStr, "unregistered"), strings.Contains(errStr, "not registered"), strings.Contains(errStr, "not found"):
+			return "torrent_not_registered"
+		case strings.Contains(errStr, "passkey"), strings.Contains(errStr, "banned"), strings.Contains(errStr, "not authorized"):
+			return "authentication_failed"
+		default:
+			return "tracker_failure"
+		}
+	case strings.Contains(errStr, "error getting ip"), strings.Contains(errStr, "no ips"), strings.Contains(errStr, "no acceptable ips"):
+		return "dns_error"
+	case strings.Contains(errStr, "client is closed"):
+		return "client_closed"
+	case strings.Contains(errStr, "context deadline exceeded"), strings.Contains(errStr, "timeout"):
+		return "timeout"
+	case strings.Contains(errStr, "context canceled"):
+		return "cancelled"
+	case strings.Contains(errStr, "connection refused"), strings.Contains(errStr, "network is unreachable"), strings.Contains(errStr, "no route to host"):
+		return "network_error"
+	case strings.Contains(errStr, "Connection ID missmatch"):
+		return "udp_connection_error"
+	default:
+		return "unknown_error"
+	}
+}
+
+func (t *Torrent) trackerTier(trackerURL string) int {
+	for tierIndex, tier := range t.announceList {
+		for _, url := range tier {
+			if url == trackerURL {
+				return tierIndex
+			}
+		}
+	}
+	return 0
+}
+
+func (t *Torrent) TrackerStatuses() []TrackerStatus {
+	t.cl.rLock()
+	defer t.cl.rUnlock()
+
+	statuses := make([]TrackerStatus, 0, len(t.trackerAnnouncers))
+	for _, announcer := range t.trackerAnnouncers {
+		switch ta := announcer.(type) {
+		case *trackerScraper:
+			status := TrackerStatus{
+				URL:              ta.originalUrl,
+				Tier:             t.trackerTier(ta.originalUrl),
+				LastError:        ta.lastAnnounce.Err,
+				LastAnnounce:     ta.lastAnnounce.Completed,
+				NumPeers:         ta.lastAnnounce.NumPeers,
+				Seeders:          ta.lastAnnounce.Seeders,
+				Leechers:         ta.lastAnnounce.Leechers,
+				Interval:         ta.lastAnnounce.Interval,
+				ConsecutiveFails: ta.consecutiveFails,
+			}
+			if !ta.lastAnnounce.Completed.IsZero() && ta.lastAnnounce.Interval > 0 {
+				status.NextAnnounce = ta.lastAnnounce.Completed.Add(ta.lastAnnounce.Interval)
+			}
+			statuses = append(statuses, status)
+		case *websocketTrackerStatus:
+			statuses = append(statuses, TrackerStatus{
+				URL:  ta.url.String(),
+				Tier: t.trackerTier(ta.url.String()),
+			})
+		}
+	}
+
+	slices.SortFunc(statuses, func(a, b TrackerStatus) int {
+		if a.Tier != b.Tier {
+			return a.Tier - b.Tier
+		}
+		return strings.Compare(a.URL, b.URL)
+	})
+	return statuses
 }
 
 func (t *Torrent) endRequestIndexForFileIndex(fileIndex int) RequestIndex {

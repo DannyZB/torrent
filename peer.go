@@ -77,7 +77,9 @@ type (
 		lastBecameInterested time.Time
 		priorInterest        time.Duration
 
-		choking bool
+		choking                                bool
+		piecesReceivedSinceLastRequestUpdate   maxRequests
+		maxPiecesReceivedBetweenRequestUpdates maxRequests
 
 		// Stuff controlled by the remote peer.
 		peerInterested        bool
@@ -250,10 +252,10 @@ func (cn *Peer) peerHasPiece(piece pieceIndex) bool {
 	return cn.peerPieces().ContainsInt(piece)
 }
 
-// 64KiB, but temporarily less to work around an issue with WebRTC. TODO: Update when
-// https://github.com/pion/datachannel/issues/59 is fixed.
+// 128KiB buffer smooths bursty writers without starving the scheduler. Downstream code keeps a
+// 50% low-water mark so we still react quickly when space frees up.
 const (
-	writeBufferHighWaterLen = 1 << 15
+	writeBufferHighWaterLen = 1 << 17
 	writeBufferLowWaterLen  = writeBufferHighWaterLen / 2
 )
 
@@ -338,8 +340,13 @@ func (c *Peer) doChunkReadStats(size int64) {
 
 // Handle a received chunk from a peer. TODO: Break this out into non-wire protocol specific
 // handling. Avoid shoehorning into a pp.Message.
-func (c *Peer) receiveChunk(msg *pp.Message) error {
-	ChunksReceived.Add("total", 1)
+func (c *Peer) receiveChunk(msg *pp.Message, msgTime time.Time) error {
+	if debugMetricsEnabled {
+		ChunksReceived.Add("total", 1)
+	}
+	if msgTime.IsZero() {
+		msgTime = time.Now()
+	}
 
 	ppReq := newRequestFromMessage(msg)
 	t := c.t
@@ -359,7 +366,9 @@ func (c *Peer) receiveChunk(msg *pp.Message) error {
 	defer recordBlockForSmartBan()
 
 	if c.peerChoking {
-		ChunksReceived.Add("while choked", 1)
+		if debugMetricsEnabled {
+			ChunksReceived.Add("while choked", 1)
+		}
 	}
 
 	intended, err := c.peerImpl.checkReceivedChunk(req, msg, ppReq)
@@ -372,7 +381,9 @@ func (c *Peer) receiveChunk(msg *pp.Message) error {
 	// Do we actually want this chunk?
 	if t.haveChunk(ppReq) {
 		// panic(fmt.Sprintf("%+v", ppReq))
-		ChunksReceived.Add("redundant", 1)
+		if debugMetricsEnabled {
+			ChunksReceived.Add("redundant", 1)
+		}
 		c.modifyRelevantConnStats(add(1, func(cs *ConnStats) *Count { return &cs.ChunksReadWasted }))
 		return nil
 	}
@@ -382,12 +393,31 @@ func (c *Peer) receiveChunk(msg *pp.Message) error {
 	c.modifyRelevantConnStats(add(1, func(cs *ConnStats) *Count { return &cs.ChunksReadUseful }))
 	c.modifyRelevantConnStats(add(int64(len(msg.Piece)), func(cs *ConnStats) *Count { return &cs.BytesReadUsefulData }))
 	if intended {
+		c.piecesReceivedSinceLastRequestUpdate++
+		if c.piecesReceivedSinceLastRequestUpdate > c.maxPiecesReceivedBetweenRequestUpdates {
+			c.maxPiecesReceivedBetweenRequestUpdates = c.piecesReceivedSinceLastRequestUpdate
+		}
+		if c.needRequestUpdate == "" {
+			if cn, ok := c.peerImpl.(*PeerConn); ok {
+				nominal := int(cn.nominalMaxRequests())
+				if nominal <= 0 {
+					nominal = 1
+				}
+				threshold := nominal / 2
+				if threshold < 1 {
+					threshold = 1
+				}
+				if int(c.piecesReceivedSinceLastRequestUpdate) >= threshold {
+					c.onNeedUpdateRequests("Peer.quickDrop")
+				}
+			}
+		}
 		c.modifyRelevantConnStats(add(int64(len(msg.Piece)), func(cs *ConnStats) *Count { return &cs.BytesReadUsefulIntendedData }))
 	}
 	for _, f := range c.t.cl.config.Callbacks.ReceivedUsefulData {
 		f(ReceivedUsefulDataEvent{c, msg})
 	}
-	c.lastUsefulChunkReceived = time.Now()
+	c.lastUsefulChunkReceived = msgTime
 
 	// Need to record that it hasn't been written yet, before we attempt to do
 	// anything with it.

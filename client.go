@@ -16,9 +16,11 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"os"
 	"runtime"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/RoaringBitmap/roaring"
@@ -66,7 +68,7 @@ type Client struct {
 	_mu lockWithDeferreds
 	// Used in constrained situations when the lock is held.
 	roaringIntIterator roaring.IntIterator
-	event              sync.Cond
+	event              *compatCond
 	closed             chansync.SetOnce
 
 	config  *ClientConfig
@@ -257,12 +259,13 @@ func (cl *Client) announceKey() int32 {
 func (cl *Client) init(cfg *ClientConfig) {
 	cl.config = cfg
 	cfg.setRateLimiterBursts()
+	configureLockDebug(&cl._mu, "client", cfg)
 	g.MakeMap(&cl.dopplegangerAddrs)
 	g.MakeMap(&cl.torrentsByShortHash)
 	g.MakeMap(&cl.torrents)
 	cl.torrentsByShortHash = make(map[metainfo.Hash]*Torrent)
 	cl.activeAnnounceLimiter.SlotsPerKey = 2
-	cl.event.L = cl.locker()
+	cl.event = newCompatCond(cl.locker())
 	cl.ipBlockList = cfg.IPBlocklist
 	cl.httpClient = &http.Client{
 		Transport: cfg.WebTransport,
@@ -347,6 +350,29 @@ func (cl *Client) init(cfg *ClientConfig) {
 	cl.webseedRequestTimer = time.AfterFunc(webseedRequestUpdateTimerInterval, cl.updateWebseedRequestsTimerFunc)
 }
 
+func configureLockDebug(mu *lockWithDeferreds, name string, cfg *ClientConfig) {
+	val := strings.TrimSpace(os.Getenv("TORRENT_LOCK_DEBUG"))
+	if val != "" {
+		lower := strings.ToLower(val)
+		switch lower {
+		case "0", "off", "false":
+			return
+		case "stack":
+			mu.EnableDebug(name, true)
+			return
+		case "1", "on", "true":
+			mu.EnableDebug(name, false)
+			return
+		default:
+			mu.EnableDebug(name, strings.Contains(lower, "stack"))
+			return
+		}
+	}
+	if cfg.Debug {
+		mu.EnableDebug(name, false)
+	}
+}
+
 // Creates a new Client. Takes ownership of the ClientConfig. Create another one if you want another
 // Client.
 func NewClient(cfg *ClientConfig) (cl *Client, err error) {
@@ -354,6 +380,7 @@ func NewClient(cfg *ClientConfig) (cl *Client, err error) {
 		cfg = NewDefaultClientConfig()
 		cfg.ListenPort = 0
 	}
+	debugMetricsEnabled = cfg.Debug
 	cl = &Client{}
 	cl.init(cfg)
 	// Belongs after infallible init
@@ -446,9 +473,9 @@ func (cl *Client) firewallCallback(net.Addr) bool {
 	block := !cl.wantConns() || !cl.config.AcceptPeerConnections
 	cl.rUnlock()
 	if block {
-		torrent.Add("connections firewalled", 1)
+		addMetric("connections firewalled", 1)
 	} else {
-		torrent.Add("connections not firewalled", 1)
+		addMetric("connections not firewalled", 1)
 	}
 	return block
 }
@@ -591,7 +618,7 @@ func (cl *Client) rejectAccepted(conn net.Conn) error {
 func (cl *Client) acceptConnections(l Listener) {
 	for {
 		conn, err := l.Accept()
-		torrent.Add("client listener accepts", 1)
+		addMetric("client listener accepts", 1)
 		if err == nil {
 			holepunchAddr, holepunchErr := addrPortFromPeerRemoteAddr(conn.RemoteAddr())
 			if holepunchErr == nil {
@@ -628,7 +655,7 @@ func (cl *Client) acceptConnections(l Listener) {
 		}
 		go func() {
 			if reject != nil {
-				torrent.Add("rejected accepted connections", 1)
+				addMetric("rejected accepted connections", 1)
 				cl.logger.LazyLog(log.Debug, func() log.Msg {
 					return log.Fmsg("rejecting accepted conn: %v", reject)
 				})
@@ -643,9 +670,9 @@ func (cl *Client) acceptConnections(l Listener) {
 					conn.RemoteAddr(),
 				)
 			})
-			torrent.Add(fmt.Sprintf("accepted conn remote IP len=%d", len(addrIpOrNil(conn.RemoteAddr()))), 1)
-			torrent.Add(fmt.Sprintf("accepted conn network=%s", conn.RemoteAddr().Network()), 1)
-			torrent.Add(fmt.Sprintf("accepted on %s listener", l.Addr().Network()), 1)
+			addMetric(fmt.Sprintf("accepted conn remote IP len=%d", len(addrIpOrNil(conn.RemoteAddr()))), 1)
+			addMetric(fmt.Sprintf("accepted conn network=%s", conn.RemoteAddr().Network()), 1)
+			addMetric(fmt.Sprintf("accepted on %s listener", l.Addr().Network()), 1)
 		}()
 	}
 }
@@ -693,9 +720,9 @@ type DialResult struct {
 
 func countDialResult(err error) {
 	if err == nil {
-		torrent.Add("successful dials", 1)
+		addMetric("successful dials", 1)
 	} else {
-		torrent.Add("unsuccessful dials", 1)
+		addMetric("unsuccessful dials", 1)
 	}
 }
 
@@ -825,7 +852,7 @@ func (cl *Client) dialAndCompleteHandshake(opts outgoingConnOpts) (c *PeerConn, 
 			time.Sleep(dialReservation.Delay())
 		}
 	}
-	torrent.Add("establish outgoing connection", 1)
+	addMetric("establish outgoing connection", 1)
 	addr := opts.peerInfo.Addr
 	dialPool := dialPool{
 		resCh: make(chan DialResult),
@@ -875,7 +902,7 @@ func (cl *Client) dialAndCompleteHandshake(opts outgoingConnOpts) (c *PeerConn, 
 		firstDialResult,
 	)
 	if err == nil {
-		torrent.Add("initiated conn with preferred header obfuscation", 1)
+		addMetric("initiated conn with preferred header obfuscation", 1)
 		return
 	}
 	c.logger.Levelf(
@@ -905,7 +932,7 @@ func (cl *Client) dialAndCompleteHandshake(opts outgoingConnOpts) (c *PeerConn, 
 		secondDialResult,
 	)
 	if err == nil {
-		torrent.Add("initiated conn with fallback header obfuscation", 1)
+		addMetric("initiated conn with fallback header obfuscation", 1)
 		return
 	}
 	c.logger.Levelf(
@@ -996,7 +1023,7 @@ func (cl *Client) initiateHandshakes(ctx context.Context, c *PeerConn, t *Torren
 		return nil
 	}
 	if t.infoHashV2.Ok && *t.infoHashV2.Value.ToShort() == ih {
-		torrent.Add("initiated handshakes upgraded to v2", 1)
+		addMetric("initiated handshakes upgraded to v2", 1)
 		c.v2 = true
 		return nil
 	}
@@ -1048,12 +1075,12 @@ func (cl *Client) receiveHandshakes(c *PeerConn) (t *Torrent, err error) {
 	c.setRW(rw)
 	if err == nil || err == mse.ErrNoSecretKeyMatch {
 		if c.headerEncrypted {
-			torrent.Add("handshakes received encrypted", 1)
+			addMetric("handshakes received encrypted", 1)
 		} else {
-			torrent.Add("handshakes received unencrypted", 1)
+			addMetric("handshakes received unencrypted", 1)
 		}
 	} else {
-		torrent.Add("handshakes received with error while handling encryption", 1)
+		addMetric("handshakes received with error while handling encryption", 1)
 	}
 	if err != nil {
 		if err == mse.ErrNoSecretKeyMatch {
@@ -1073,7 +1100,7 @@ func (cl *Client) receiveHandshakes(c *PeerConn) (t *Torrent, err error) {
 	cl.lock()
 	t = cl.torrentsByShortHash[ih]
 	if t != nil && t.infoHashV2.Ok && *t.infoHashV2.Value.ToShort() == ih {
-		torrent.Add("v2 handshakes received", 1)
+		addMetric("v2 handshakes received", 1)
 		c.v2 = true
 	}
 	cl.unlock()
@@ -1120,14 +1147,14 @@ func (cl *Client) runReceivedConn(c *PeerConn) {
 				"network", c.Network,
 			)
 		})
-		torrent.Add("error receiving handshake", 1)
+		addMetric("error receiving handshake", 1)
 		cl.lock()
 		cl.onBadAccept(c.RemoteAddr)
 		cl.unlock()
 		return
 	}
 	if t == nil {
-		torrent.Add("received handshake for unloaded torrent", 1)
+		addMetric("received handshake for unloaded torrent", 1)
 		cl.logger.LazyLog(log.Debug, func() log.Msg {
 			return log.Fmsg("received handshake for unloaded torrent")
 		})
@@ -1136,7 +1163,7 @@ func (cl *Client) runReceivedConn(c *PeerConn) {
 		cl.unlock()
 		return
 	}
-	torrent.Add("received handshake for loaded torrent", 1)
+	addMetric("received handshake for loaded torrent", 1)
 	c.conn.SetWriteDeadline(time.Time{})
 	cl.lock()
 	defer cl.unlock()
@@ -1168,7 +1195,7 @@ func (t *Torrent) runHandshookConn(pc *PeerConn) error {
 	pc.r = deadlineReader{pc.conn, pc.r}
 	completedHandshakeConnectionFlags.Add(pc.connectionFlags(), 1)
 	if connIsIpv6(pc.conn) {
-		torrent.Add("completed handshake over ipv6", 1)
+		addMetric("completed handshake over ipv6", 1)
 	}
 	if err := t.addPeerConn(pc); err != nil {
 		return fmt.Errorf("adding connection: %w", err)
@@ -1229,7 +1256,7 @@ func (c *PeerConn) updateRequestsTimerFunc() {
 	if d := time.Since(c.lastRequestUpdate); d < updateRequestsTimerDuration {
 		// These should be benign, Timer.Stop doesn't guarantee that its function won't run if it's
 		// already been fired.
-		torrent.Add("spurious timer requests updates", 1)
+		addMetric("spurious timer requests updates", 1)
 		return
 	}
 	c.onNeedUpdateRequests(peerUpdateRequestsTimerReason)
@@ -1413,10 +1440,8 @@ func (cl *Client) newTorrentOpt(opts AddTorrentOpts) (t *Torrent) {
 		storageOpener:       storageClient,
 		maxEstablishedConns: cl.config.EstablishedConnsPerTorrent,
 
-		metadataChanged: sync.Cond{
-			L: cl.locker(),
-		},
-		gotMetainfoC: make(chan struct{}),
+		metadataChanged: newCompatCond(cl.locker()),
+		gotMetainfoC:    make(chan struct{}),
 
 		ignoreUnverifiedPieceCompletion: opts.IgnoreUnverifiedPieceCompletion,
 		initialPieceCheckDisabled:       opts.DisableInitialPieceCheck,
@@ -1774,6 +1799,10 @@ func (cl *Client) onDHTAnnouncePeer(ih metainfo.Hash, ip net.IP, port int, portO
 	defer cl.unlock()
 	t := cl.torrentsByShortHash[ih]
 	if t == nil {
+		return
+	}
+	// Ignore announce_peer for private torrents (BEP 27)
+	if t.info != nil && t.info.Private != nil && *t.info.Private {
 		return
 	}
 	t.addPeers([]PeerInfo{{

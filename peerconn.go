@@ -271,7 +271,7 @@ func (cn *PeerConn) onClose() {
 // Writes a message into the write buffer. Returns whether it's okay to keep writing. Writing is
 // done asynchronously, so it may be that we're not able to honour backpressure from this method.
 func (cn *PeerConn) write(msg pp.Message) bool {
-	torrent.Add(fmt.Sprintf("messages written of type %s", msg.Type.String()), 1)
+	addMetric(fmt.Sprintf("messages written of type %s", msg.Type.String()), 1)
 	// We don't need to track bytes here because the connection's Writer has that behaviour injected
 	// (although there's some delay between us buffering the message, and the connection writer
 	// flushing it out.).
@@ -304,7 +304,7 @@ func (cn *PeerConn) requestedMetadataPiece(index int) bool {
 
 func (cn *PeerConn) onPeerSentCancel(r Request) {
 	if !cn.havePeerRequest(r) {
-		torrent.Add("unexpected cancels received", 1)
+		addMetric("unexpected cancels received", 1)
 		return
 	}
 	if cn.fastEnabled() {
@@ -595,13 +595,13 @@ func (c *PeerConn) requestPendingMetadata() {
 }
 
 func (cn *PeerConn) wroteMsg(msg *pp.Message) {
-	torrent.Add(fmt.Sprintf("messages written of type %s", msg.Type.String()), 1)
+	addMetric(fmt.Sprintf("messages written of type %s", msg.Type.String()), 1)
 	if msg.Type == pp.Extended {
 		for name, id := range cn.PeerExtensionIDs {
 			if id != msg.ExtendedID {
 				continue
 			}
-			torrent.Add(fmt.Sprintf("Extended messages written for protocol %q", name), 1)
+			addMetric(fmt.Sprintf("Extended messages written for protocol %q", name), 1)
 		}
 	}
 	cn.modifyRelevantConnStats(func(cs *ConnStats) { cs.wroteMsg(msg) })
@@ -640,23 +640,23 @@ func (me *PeerConn) numPeerRequests() int {
 func (c *PeerConn) onReadRequest(r Request, startFetch bool) error {
 	requestedChunkLengths.Add(strconv.FormatUint(r.Length.Uint64(), 10), 1)
 	if c.havePeerRequest(r) {
-		torrent.Add("duplicate requests received", 1)
+		addMetric("duplicate requests received", 1)
 		if c.fastEnabled() {
 			return errors.New("received duplicate request with fast enabled")
 		}
 		return nil
 	}
 	if c.choking {
-		torrent.Add("requests received while choking", 1)
+		addMetric("requests received while choking", 1)
 		if c.fastEnabled() {
-			torrent.Add("requests rejected while choking", 1)
+			addMetric("requests rejected while choking", 1)
 			c.reject(r)
 		}
 		return nil
 	}
 	// TODO: What if they've already requested this?
 	if c.numPeerRequests() >= localClientReqq {
-		torrent.Add("requests received while queue full", 1)
+		addMetric("requests received while queue full", 1)
 		if c.fastEnabled() {
 			c.reject(r)
 		}
@@ -682,7 +682,7 @@ func (c *PeerConn) onReadRequest(r Request, startFetch bool) error {
 	pieceLength := c.t.pieceLength(pieceIndex(r.Index))
 	// Check this after we know we have the piece, so that the piece length will be known.
 	if chunkOverflowsPiece(r.ChunkSpec, pieceLength) {
-		torrent.Add("bad requests received", 1)
+		addMetric("bad requests received", 1)
 		return errors.New("chunk overflows piece")
 	}
 	MakeMapIfNilWithCap(&c.unreadPeerRequests, localClientReqq)
@@ -792,7 +792,7 @@ func (c *PeerConn) servePeerRequest(r Request) {
 // If this is maintained correctly, we might be able to support optional synchronous reading for
 // chunk sending, the way it used to work.
 func (c *PeerConn) peerRequestDataReadFailed(err error, r Request) {
-	torrent.Add("peer request data read failures", 1)
+	addMetric("peer request data read failures", 1)
 	logLevel := log.Warning
 	if c.t.hasStorageCap() || c.t.closed.IsSet() {
 		// It's expected that pieces might drop. See
@@ -864,9 +864,9 @@ func (c *PeerConn) logProtocolBehaviour(level log.Level, format string, arg ...i
 func (c *PeerConn) mainReadLoop() (err error) {
 	defer func() {
 		if err != nil {
-			torrent.Add("connection.mainReadLoop returned with error", 1)
+			addMetric("connection.mainReadLoop returned with error", 1)
 		} else {
-			torrent.Add("connection.mainReadLoop returned with no error", 1)
+			addMetric("connection.mainReadLoop returned with no error", 1)
 		}
 	}()
 	t := c.t
@@ -878,6 +878,7 @@ func (c *PeerConn) mainReadLoop() (err error) {
 		Pool:      &t.chunkPool,
 	}
 	for {
+		messageStartTime := time.Now()
 		var msg pp.Message
 		func() {
 			cl.unlock()
@@ -898,14 +899,14 @@ func (c *PeerConn) mainReadLoop() (err error) {
 			err = log.WithLevel(log.Info, err)
 			return err
 		}
-		c.lastMessageReceived = time.Now()
+		c.lastMessageReceived = messageStartTime
 		if msg.Keepalive {
 			receivedKeepalives.Add(1)
 			continue
 		}
 		messageTypesReceived.Add(msg.Type.String(), 1)
 		if msg.Type.FastExtension() && !c.fastEnabled() {
-			runSafeExtraneous(func() { torrent.Add("fast messages received when extension is disabled", 1) })
+			runSafeExtraneous(func() { addMetric("fast messages received when extension is disabled", 1) })
 			return fmt.Errorf("received fast extension message (type=%v) but extension is disabled", msg.Type)
 		}
 		switch msg.Type {
@@ -948,7 +949,7 @@ func (c *PeerConn) mainReadLoop() (err error) {
 					preservedCount,
 					c.fastEnabled())
 
-				torrent.Add("requestsPreservedThroughChoking", int64(preservedCount))
+				addMetric("requestsPreservedThroughChoking", int64(preservedCount))
 			}
 			if !c.t._pendingPieces.IsEmpty() {
 				c.onNeedUpdateRequests("unchoked")
@@ -974,7 +975,7 @@ func (c *PeerConn) mainReadLoop() (err error) {
 			}
 		case pp.Piece:
 			c.doChunkReadStats(int64(len(msg.Piece)))
-			err = c.receiveChunk(&msg)
+			err = c.receiveChunk(&msg, messageStartTime)
 			t.putChunkBuffer(msg.Piece)
 			msg.Piece = nil
 			if err != nil {
@@ -999,7 +1000,7 @@ func (c *PeerConn) mainReadLoop() (err error) {
 				go s.Ping(&pingAddr)
 			})
 		case pp.Suggest:
-			torrent.Add("suggests received", 1)
+			addMetric("suggests received", 1)
 			log.Fmsg("peer suggested piece %d", msg.Index).AddValues(c, msg.Index).LogLevel(log.Debug, c.t.logger)
 			c.onNeedUpdateRequests("suggested")
 		case pp.HaveAll:
@@ -1013,7 +1014,7 @@ func (c *PeerConn) mainReadLoop() (err error) {
 				c.protocolLogger.Levelf(log.Debug, "%v", err)
 			}
 		case pp.AllowedFast:
-			torrent.Add("allowed fasts received", 1)
+			addMetric("allowed fasts received", 1)
 			log.Fmsg("peer allowed fast: %d", msg.Index).AddValues(c).LogLevel(log.Debug, c.t.logger)
 			c.onNeedUpdateRequests("PeerConn.mainReadLoop allowed fast")
 		case pp.Extended:
@@ -1093,9 +1094,11 @@ func (c *PeerConn) onReadExtendedMsg(id pp.ExtensionNumber, payload []byte) (err
 		}
 		c.requestPendingMetadata()
 		if !t.cl.config.DisablePEX {
-			t.pex.Add(c) // we learnt enough now
-			// This checks the extension is supported internally.
-			c.pex.Init(c)
+			if t.info == nil || t.info.Private == nil || !*t.info.Private {
+				t.pex.Add(c) // we learnt enough now
+				// This checks the extension is supported internally.
+				c.pex.Init(c)
+			} // PEX is disabled for private torrents (BEP 27)
 		}
 		return nil
 	}
