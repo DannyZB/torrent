@@ -1537,7 +1537,14 @@ func (t *Torrent) updatePeerRequestsForPiece(piece pieceIndex, reason updateRequ
 // Stuff we don't want to run when the pending pieces change while benchmarking.
 func (t *Torrent) onPiecePendingTriggers(piece pieceIndex) {
 	t.maybeNewConns()
-	t.deferPublishPieceStateChange(piece)
+	// Check if we're in internal lock context (allowDefers=false) or regular lock context (allowDefers=true)
+	if t.cl._mu.allowDefers {
+		// Regular lock context: defer for deduplication
+		t.deferPublishPieceStateChange(piece)
+	} else {
+		// Internal lock context: direct call to avoid pubsub deadlock
+		t.piece(piece).publishStateChange()
+	}
 }
 
 // Pending pieces is an old bitmap of stuff we want. I think it's more nuanced than that now with
