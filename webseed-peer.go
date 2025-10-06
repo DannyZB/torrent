@@ -472,7 +472,7 @@ func (ws *webseedPeer) readChunks(wr *webseedRequest) (err error) {
 		msg.Index = reqSpec.Index
 		msg.Begin = reqSpec.Begin
 
-		ws.peer.t.cl._mu.internal.Lock() // Use internal lock to bypass deferred actions
+		ws.peer.locker().Lock()
 		// Ensure the request is pointing to the next chunk before receiving the current one. If
 		// webseed requests are triggered, we want to ensure our existing request is up to date.
 		wr.next++
@@ -485,7 +485,7 @@ func (ws *webseedPeer) readChunks(wr *webseedRequest) (err error) {
 				wr.Cancel("no wanted chunks in discard window")
 			}
 		}
-		ws.peer.t.cl._mu.internal.Unlock() // Use internal unlock to bypass deferred actions
+		ws.peer.locker().Unlock()
 
 		if err != nil {
 			err = fmt.Errorf("processing chunk: %w", err)
