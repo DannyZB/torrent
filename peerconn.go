@@ -1807,7 +1807,14 @@ func (cn *PeerConn) onNeedUpdateRequests(reason updateRequestReason) {
 	}
 	cn.needRequestUpdate = reason
 	// Run this before the Client lock is released.
-	cn.locker().DeferUniqueUnaryFunc(cn, cn.handleOnNeedUpdateRequests)
+	// Check if we're in internal lock context (allowDefers=false) or regular lock context (allowDefers=true)
+	if cn.locker().allowDefers {
+		// Regular lock context: defer for batching
+		cn.locker().DeferUniqueUnaryFunc(cn, cn.handleOnNeedUpdateRequests)
+	} else {
+		// Internal lock context: call directly to avoid panic
+		cn.handleOnNeedUpdateRequests()
+	}
 }
 
 // Returns true if it was valid to reject the request.
