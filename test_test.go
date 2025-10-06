@@ -5,19 +5,25 @@ package torrent
 import (
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/anacrolix/torrent/metainfo"
 )
 
 func newTestingClient(t testing.TB) *Client {
-	cl := new(Client)
-	cl.init(TestingConfig(t))
+	cl, err := NewClient(TestingConfig(t))
+	qt.Assert(t, qt.IsNil(err))
 	t.Cleanup(func() {
 		cl.Close()
 	})
-	cl.initLogger()
 	return cl
 }
 
+var testingTorrentInfoHash = metainfo.Hash{1}
+
 func (cl *Client) newTorrentForTesting() *Torrent {
-	return cl.newTorrent(metainfo.Hash{1}, nil)
+	return cl.newTorrentOpt(AddTorrentOpts{
+		InfoHash:                 testingTorrentInfoHash,
+		DisableInitialPieceCheck: true,
+	})
 }

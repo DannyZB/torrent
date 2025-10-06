@@ -26,9 +26,8 @@ type trackerScraper struct {
 	lookupTrackerIp func(*url.URL) ([]net.IP, error)
 
 	// TODO: chansync
-	stopOnce sync.Once
-	stopCh   chan struct{}
-	
+	stopOnce         sync.Once
+	stopCh           chan struct{}
 	originalUrl      string
 	consecutiveFails int
 }
@@ -227,7 +226,6 @@ func (me *trackerScraper) Run() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	// TODO: Get rid of the need for this.
 	go func() {
 		defer cancel()
 		select {
@@ -262,8 +260,6 @@ func (me *trackerScraper) Run() {
 		me.t.cl.lock()
 		wantPeers := me.t.wantPeersEvent.C()
 		me.t.cl.unlock()
-
-		// If we want peers, reduce the interval to the minimum if it's appropriate.
 
 		// A channel that receives when we should reconsider our interval. Starts as nil since that
 		// never receives.

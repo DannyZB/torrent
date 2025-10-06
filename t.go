@@ -38,9 +38,8 @@ func (t *Torrent) NewReader() Reader {
 	return t.newReader(0, t.length())
 }
 
-// NewPassiveReader creates a reader that doesn't trigger piece priority updates
-// or other performance-impacting operations. Use for reading already downloaded
-// data without affecting download strategy.
+// NewPassiveReader creates a reader that avoids triggering piece priority updates while consuming
+// data that is already available.
 func (t *Torrent) NewPassiveReader() Reader {
 	return t.newPassiveReader(0, t.length())
 }
@@ -67,8 +66,8 @@ func (t *Torrent) newPassiveReader(offset, length int64) Reader {
 		ctx:     context.Background(),
 		passive: true,
 	}
-	r.readaheadFunc = defaultReadaheadFunc // Safe - just calculates readahead amount
-	t.addReader(&r)                        // Still register for proper cleanup
+	r.readaheadFunc = defaultReadaheadFunc
+	t.addReader(&r)
 	return &r
 }
 
@@ -117,18 +116,20 @@ func (t *Torrent) PieceBytesMissing(piece int) int64 {
 	return int64(t.pieces[piece].bytesLeft())
 }
 
-// Drop the torrent from the client, and close it. It's always safe to do
-// this. No data corruption can, or should occur to either the torrent's data,
-// or connected peers.
+// Drop the torrent from the client, and close it. It's always safe to do this. No data corruption
+// can, or should occur to either the torrent's data, or connected peers.
 func (t *Torrent) Drop() {
-	var wg sync.WaitGroup
-	defer wg.Wait()
+	if t.closed.IsSet() {
+		return
+	}
 	t.cl.lock()
 	defer t.cl.unlock()
-	err := t.cl.dropTorrent(t, &wg)
-	if err != nil {
-		panic(err)
+	if t.closed.IsSet() {
+		return
 	}
+	var wg sync.WaitGroup
+	t.close(&wg)
+	wg.Wait()
 }
 
 // Number of bytes of the entire torrent we have completed. This is the sum of
@@ -226,7 +227,8 @@ func (t *Torrent) CancelPieces(begin, end pieceIndex) {
 
 func (t *Torrent) cancelPiecesLocked(begin, end pieceIndex, reason updateRequestReason) {
 	for i := begin; i < end; i++ {
-		p := &t.pieces[i]
+		p := t.piece(i)
+		// Intentionally cancelling only the piece-specific priority here.
 		if p.priority == PiecePriorityNone {
 			continue
 		}
@@ -311,12 +313,13 @@ func (t *Torrent) PeerConns() []*PeerConn {
 	return ret
 }
 
+// TODO: Misleading method name. Webseed peers are not PeerConns.
 func (t *Torrent) WebseedPeerConns() []*Peer {
 	t.cl.rLock()
 	defer t.cl.rUnlock()
 	ret := make([]*Peer, 0, len(t.conns))
 	for _, c := range t.webSeeds {
-		ret = append(ret, c)
+		ret = append(ret, &c.peer)
 	}
 	return ret
 }

@@ -133,10 +133,9 @@ func TestAddDropManyTorrents(t *testing.T) {
 	require.NoError(t, err)
 	defer cl.Close()
 	for i := range 1000 {
-		var spec TorrentSpec
-		binary.PutVarint(spec.InfoHash[:], int64(i+1))
-		tt, new, err := cl.AddTorrentSpec(&spec)
-		assert.NoError(t, err)
+		var opts AddTorrentOpts
+		binary.PutVarint(opts.InfoHash[:], int64(i+1))
+		tt, new := cl.AddTorrentOpt(opts)
 		assert.True(t, new)
 		defer tt.Drop()
 	}
@@ -164,7 +163,7 @@ func TestMergingTrackersByAddingSpecs(t *testing.T) {
 	spec.Trackers = [][]string{{"http://a"}, {"udp://b"}}
 	_, new, _ = cl.AddTorrentSpec(&spec)
 	assert.False(t, new)
-	assert.EqualValues(t, [][]string{{"http://a"}, {"udp://b"}}, T.metainfo.AnnounceList)
+	assert.EqualValues(t, [][]string{{"http://a"}, {"udp://b"}}, T.announceList)
 	// Because trackers are disabled in TestingConfig.
 	assert.EqualValues(t, 0, len(T.trackerAnnouncers))
 }
@@ -185,11 +184,10 @@ func TestCompletedPieceWrongSize(t *testing.T) {
 	}
 	b, err := bencode.Marshal(info)
 	require.NoError(t, err)
-	tt, new, err := cl.AddTorrentSpec(&TorrentSpec{
+	tt, new := cl.AddTorrentOpt(AddTorrentOpts{
 		InfoBytes: b,
 		InfoHash:  metainfo.HashBytes(b),
 	})
-	require.NoError(t, err)
 	defer tt.Drop()
 	assert.True(t, new)
 	r := tt.NewReader()
@@ -323,20 +321,20 @@ func TestTorrentDroppedDuringResponsiveRead(t *testing.T) {
 		return
 	}())
 	leecherTorrent.AddClientPeer(seeder)
-	reader := leecherTorrent.NewReader()
-	t.Cleanup(func() { reader.Close() })
-	reader.SetReadahead(0)
-	reader.SetResponsive()
+	rdr := leecherTorrent.NewReader()
+	t.Cleanup(func() { rdr.Close() })
+	rdr.SetReadahead(0)
+	rdr.SetResponsive()
 	b := make([]byte, 2)
-	_, err = reader.Seek(3, io.SeekStart)
+	_, err = rdr.Seek(3, io.SeekStart)
 	require.NoError(t, err)
-	_, err = io.ReadFull(reader, b)
+	_, err = io.ReadFull(rdr, b)
 	assert.Nil(t, err)
 	assert.EqualValues(t, "lo", string(b))
-	_, err = reader.Seek(11, io.SeekStart)
+	_, err = rdr.Seek(11, io.SeekStart)
 	require.NoError(t, err)
 	leecherTorrent.Drop()
-	n, err := reader.Read(b)
+	n, err := rdr.Read(b)
 	qt.Assert(t, qt.Equals(err, errTorrentClosed))
 	assert.EqualValues(t, 0, n)
 }
@@ -367,10 +365,9 @@ func TestAddTorrentSpecMerging(t *testing.T) {
 	defer cl.Close()
 	dir, mi := testutil.GreetingTestTorrent()
 	defer os.RemoveAll(dir)
-	tt, new, err := cl.AddTorrentSpec(&TorrentSpec{
+	tt, new := cl.AddTorrentOpt(AddTorrentOpts{
 		InfoHash: mi.HashInfoBytes(),
 	})
-	require.NoError(t, err)
 	require.True(t, new)
 	require.Nil(t, tt.Info())
 	_, new, err = cl.AddTorrentSpec(TorrentSpecFromMetaInfo(mi))
@@ -384,7 +381,7 @@ func TestTorrentDroppedBeforeGotInfo(t *testing.T) {
 	os.RemoveAll(dir)
 	cl, _ := NewClient(TestingConfig(t))
 	defer cl.Close()
-	tt, _, _ := cl.AddTorrentSpec(&TorrentSpec{
+	tt, _ := cl.AddTorrentOpt(AddTorrentOpts{
 		InfoHash: mi.HashInfoBytes(),
 	})
 	tt.Drop()
@@ -474,7 +471,7 @@ func TestAddMetainfoWithNodes(t *testing.T) {
 	require.NoError(t, err)
 	// Nodes are not added or exposed in Torrent's metainfo. We just randomly
 	// check if the announce-list is here instead. TODO: Add nodes.
-	assert.Len(t, tt.metainfo.AnnounceList, 5)
+	assert.Len(t, tt.announceList, 5)
 	// There are 6 nodes in the torrent file.
 	for sum() != int64(6*len(cl.dhtServers)) {
 		time.Sleep(time.Millisecond)
@@ -568,12 +565,11 @@ func TestPeerInvalidHave(t *testing.T) {
 	}
 	infoBytes, err := bencode.Marshal(info)
 	require.NoError(t, err)
-	tt, _new, err := cl.AddTorrentSpec(&TorrentSpec{
+	tt, _new := cl.AddTorrentOpt(AddTorrentOpts{
 		InfoBytes: infoBytes,
 		InfoHash:  metainfo.HashBytes(infoBytes),
 		Storage:   badStorage{},
 	})
-	require.NoError(t, err)
 	assert.True(t, _new)
 	defer tt.Drop()
 	cn := &PeerConn{Peer: Peer{
@@ -596,7 +592,7 @@ func TestPieceCompletedInStorageButNotClient(t *testing.T) {
 	seeder, err := NewClient(TestingConfig(t))
 	require.NoError(t, err)
 	defer seeder.Close()
-	_, new, err := seeder.AddTorrentSpec(&TorrentSpec{
+	_, new := seeder.AddTorrentOpt(AddTorrentOpts{
 		InfoBytes: greetingMetainfo.InfoBytes,
 		InfoHash:  greetingMetainfo.HashInfoBytes(),
 	})
@@ -745,7 +741,7 @@ func testSeederLeecherPair(t *testing.T, seeder, leecher func(*ClientConfig)) {
 	// against more than one torrent. See issue #114
 	makeMagnet(t, server, cfg.DataDir, "test2")
 	for i := 0; i < 100; i++ {
-		makeMagnet(t, server, cfg.DataDir, fmt.Sprintf("test%d", i+2))
+		makeMagnet(t, server, cfg.DataDir, fmt.Sprintf("test%d", i+3))
 	}
 	cfg = TestingConfig(t)
 	cfg.DataDir = filepath.Join(cfg.DataDir, "client")

@@ -69,3 +69,13 @@ type Completion struct {
 type SelfHashing interface {
 	SelfHash() (metainfo.Hash, error)
 }
+
+// Piece supports dedicated reader.
+type PieceReaderer interface {
+	NewReader() (PieceReader, error)
+}
+
+type PieceReader interface {
+	io.ReaderAt
+	io.Closer
+}

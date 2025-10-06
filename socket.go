@@ -47,11 +47,16 @@ func listen(n network, addr string, f firewallCallback, logger log.Logger, disab
 // connect to other clients that actually try to holepunch TCP.
 const dialTcpFromListenPort = false
 
+var SocketIPTypeOfService = 0
+
 var tcpListenConfig = net.ListenConfig{
 	Control: func(network, address string, c syscall.RawConn) (err error) {
 		controlErr := c.Control(func(fd uintptr) {
 			if dialTcpFromListenPort {
 				err = setReusePortSockOpts(fd)
+			}
+			if err == nil && SocketIPTypeOfService != 0 {
+				err = setSockIPTOS(fd, SocketIPTypeOfService)
 			}
 		})
 		if err != nil {
@@ -90,6 +95,9 @@ func listenTcp(network, address string) (s socket, err error) {
 				// think Linux older than ~2013 doesn't support SO_REUSEPORT.
 				if dialTcpFromListenPort {
 					err = setReusePortSockOpts(fd)
+				}
+				if err == nil && SocketIPTypeOfService != 0 {
+					err = setSockIPTOS(fd, SocketIPTypeOfService)
 				}
 			})
 			if err == nil {

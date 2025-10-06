@@ -2,19 +2,18 @@ package torrent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	g "github.com/anacrolix/generics"
-	"github.com/anacrolix/log"
 	"github.com/anacrolix/missinggo/v2"
 	"github.com/anacrolix/missinggo/v2/bitmap"
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -88,15 +87,13 @@ func BenchmarkUpdatePiecePriorities(b *testing.B) {
 		numPieces   = 13410
 		pieceLength = 256 << 10
 	)
-	cl := &Client{config: TestingConfig(b)}
-	cl.initLogger()
+	cl := newTestingClient(b)
 	t := cl.newTorrentForTesting()
-	require.NoError(b, t.setInfo(&metainfo.Info{
+	require.NoError(b, t.setInfoUnlocked(&metainfo.Info{
 		Pieces:      make([]byte, metainfo.HashSize*numPieces),
 		PieceLength: pieceLength,
 		Length:      pieceLength * numPieces,
 	}))
-	t.onSetInfo()
 	assert.EqualValues(b, 13410, t.numPieces())
 	for i := 0; i < 7; i += 1 {
 		r := t.NewReader()
@@ -108,8 +105,10 @@ func BenchmarkUpdatePiecePriorities(b *testing.B) {
 		t._completedPieces.Add(bitmap.BitIndex(i))
 	}
 	t.DownloadPieces(0, t.numPieces())
-	for i := 0; i < b.N; i += 1 {
+	for b.Loop() {
+		cl.lock()
 		t.updateAllPiecePriorities("")
+		cl.unlock()
 	}
 }
 
@@ -153,11 +152,13 @@ func TestPieceHashFailed(t *testing.T) {
 	cl := newTestingClient(t)
 	tt := cl.newTorrent(mi.HashInfoBytes(), badStorage{})
 	tt.setChunkSize(2)
+	tt.cl.lock()
 	require.NoError(t, tt.setInfoBytesLocked(mi.InfoBytes))
+	tt.cl.unlock()
 	tt.cl.lock()
 	tt.dirtyChunks.AddRange(
-		uint64(tt.pieceRequestIndexOffset(1)),
-		uint64(tt.pieceRequestIndexOffset(1)+3))
+		uint64(tt.pieceRequestIndexBegin(1)),
+		uint64(tt.pieceRequestIndexBegin(1)+3))
 	require.True(t, tt.pieceAllDirty(1))
 	tt.pieceHashed(1, false, nil)
 	// Dirty chunks should be cleared so we can try again.
@@ -223,34 +224,79 @@ func TestTorrentMetainfoIncompleteMetadata(t *testing.T) {
 	assert.Nil(t, tt.Metainfo().InfoBytes)
 }
 
+func TestTrackerStatusErrorType(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  string
+		want string
+	}{
+		{"no error", "", ""},
+		{"http 404", "response from tracker: 404 Not Found", "tracker_not_found"},
+		{"http 503", "response from tracker: 503 Service Unavailable", "tracker_unavailable"},
+		{"auth", "response from tracker: 401 Unauthorized", "authentication_failed"},
+		{"tracker failure", "tracker gave failure reason: torrent not registered", "torrent_not_registered"},
+		{"passkey", "tracker gave failure reason: passkey invalid", "authentication_failed"},
+		{"dns", "error getting ip: lookup failed", "dns_error"},
+		{"timeout", "context deadline exceeded", "timeout"},
+		{"cancel", "context canceled", "cancelled"},
+		{"network", "dial tcp: connection refused", "network_error"},
+		{"udp", "Connection ID missmatch", "udp_connection_error"},
+		{"unknown", "some other error", "unknown_error"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			status := TrackerStatus{}
+			if tc.err != "" {
+				status.LastError = errors.New(tc.err)
+			}
+			got := status.ErrorType()
+			if got != tc.want {
+				t.Fatalf("got %q want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCheckPendingPiecesDownloadDisabled(t *testing.T) {
+	cl := newTestingClient(t)
+	tor := cl.newTorrentForTesting()
+	require.NoError(t, tor.setInfoUnlocked(&metainfo.Info{
+		Pieces:      make([]byte, metainfo.HashSize),
+		PieceLength: 1 << 18,
+		Length:      1 << 18,
+	}))
+	cl.lock()
+	tor.initPieceRequestOrder()
+	tor._pendingPieces.Add(0)
+	tor.dataDownloadDisallowed.Set()
+	cl.unlock()
+	require.NotPanics(t, func() {
+		tor.checkPendingPiecesMatchesRequestOrder()
+	})
+}
+
 func TestRelativeAvailabilityHaveNone(t *testing.T) {
-	c := qt.New(t)
 	var err error
-	cl := Client{
-		config: TestingConfig(t),
-	}
-	tt := Torrent{
-		cl:           &cl,
-		logger:       log.Default,
-		gotMetainfoC: make(chan struct{}),
-	}
+	cl := newTestingClient(t)
+	mi, _ := testutil.Greeting.Generate(5)
+	tt := cl.newTorrentOpt(AddTorrentOpts{InfoHash: mi.HashInfoBytes()})
 	tt.setChunkSize(2)
 	g.MakeMapIfNil(&tt.conns)
 	pc := PeerConn{}
-	pc.t = &tt
+	pc.t = tt
 	pc.legacyPeerImpl = &pc
 	pc.initRequestState()
 	g.InitNew(&pc.callbacks)
+	tt.cl.lock()
 	tt.conns[&pc] = struct{}{}
 	err = pc.peerSentHave(0)
-	c.Assert(err, qt.IsNil)
-	info := testutil.Greeting.Info(5)
-	err = tt.setInfo(&info)
-	c.Assert(err, qt.IsNil)
-	tt.onSetInfo()
+	tt.cl.unlock()
+	qt.Assert(t, qt.IsNil(err))
+	err = tt.SetInfoBytes(mi.InfoBytes)
+	qt.Assert(t, qt.IsNil(err))
+	tt.cl.lock()
 	err = pc.peerSentHaveNone()
-	c.Assert(err, qt.IsNil)
-	var wg sync.WaitGroup
-	tt.close(&wg)
+	tt.cl.unlock()
+	qt.Assert(t, qt.IsNil(err))
+	tt.Drop()
 	tt.assertAllPiecesRelativeAvailabilityZero()
 }

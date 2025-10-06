@@ -3,8 +3,8 @@ module github.com/anacrolix/torrent/tests/webseed-partial-seed
 go 1.23
 
 require (
-	github.com/frankban/quicktest v1.14.6
-	github.com/anacrolix/torrent v1.55.0
+	github.com/anacrolix/torrent v1.56.1
+	github.com/go-quicktest/qt v1.101.0
 )
 
 require (

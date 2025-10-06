@@ -227,8 +227,6 @@ func (info *Info) UpvertedV1Files() iter.Seq[FileInfo] {
 				return
 			}
 		}
-		return
-
 	}
 }
 
@@ -264,3 +262,5 @@ func (info *Info) FileSegmentsIndex() segments.Index {
 		}
 	}))
 }
+
+// TODO: Add NumFiles helper?

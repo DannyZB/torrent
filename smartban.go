@@ -11,6 +11,7 @@ import (
 
 type bannableAddr = netip.Addr
 
+// TODO: Should be keyed on weak[Peer].
 type smartBanCache = smartban.Cache[bannableAddr, RequestIndex, uint64]
 
 type blockCheckingWriter struct {
@@ -25,7 +26,8 @@ type blockCheckingWriter struct {
 func (me *blockCheckingWriter) checkBlock() {
 	b := me.blockBuffer.Next(me.chunkSize)
 	for _, peer := range me.cache.CheckBlock(me.requestIndex, b) {
-		g.MakeMapIfNilAndSet(&me.badPeers, peer, struct{}{})
+		g.MakeMapIfNil(&me.badPeers)
+		me.badPeers[peer] = struct{}{}
 	}
 	me.requestIndex++
 }

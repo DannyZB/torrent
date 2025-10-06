@@ -6,7 +6,7 @@ import (
 	"os"
 
 	g "github.com/anacrolix/generics"
-	"github.com/anacrolix/missinggo/v2"
+	missinggo "github.com/anacrolix/missinggo/v2"
 
 	"github.com/anacrolix/torrent/metainfo"
 )
@@ -36,11 +36,11 @@ type Torrent struct {
 }
 
 // Deprecated. Use PieceWithHash, as this doesn't work with pure v2 torrents.
-func (t Torrent) Piece(p metainfo.Piece) Piece {
+func (t *Torrent) Piece(p metainfo.Piece) Piece {
 	return t.PieceWithHash(p, g.Some(p.V1Hash().Unwrap().Bytes()))
 }
 
-func (t Torrent) PieceWithHash(p metainfo.Piece, pieceHash g.Option[[]byte]) Piece {
+func (t *Torrent) PieceWithHash(p metainfo.Piece, pieceHash g.Option[[]byte]) Piece {
 	var pieceImpl PieceImpl
 	if t.TorrentImpl.PieceWithHash != nil {
 		pieceImpl = t.TorrentImpl.PieceWithHash(p, pieceHash)
@@ -57,8 +57,6 @@ type Piece struct {
 
 var _ io.WriterTo = Piece{}
 
-// Why do we have this wrapper? Well PieceImpl doesn't implement io.Reader, so we can't let io.Copy
-// and friends check for io.WriterTo and fallback for us since they expect an io.Reader.
 func (p Piece) WriteTo(w io.Writer) (int64, error) {
 	if i, ok := p.PieceImpl.(io.WriterTo); ok {
 		return i.WriteTo(w)

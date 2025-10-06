@@ -1,13 +1,14 @@
 package torrent
 
 import (
-	"github.com/minio/sha256-simd"
+	"iter"
 
 	"github.com/RoaringBitmap/roaring"
 	g "github.com/anacrolix/generics"
 	"github.com/anacrolix/missinggo/v2/bitmap"
 
 	"github.com/anacrolix/torrent/metainfo"
+	infohash_v2 "github.com/anacrolix/torrent/types/infohash-v2"
 )
 
 // Provides access to regions of torrent data that correspond to its files.
@@ -19,7 +20,7 @@ type File struct {
 	fi          metainfo.FileInfo
 	displayPath string
 	prio        PiecePriority
-	piecesRoot  g.Option[[sha256.Size]byte]
+	piecesRoot  g.Option[infohash_v2.T]
 }
 
 func (f *File) String() string {
@@ -40,7 +41,7 @@ func (f *File) FileInfo() metainfo.FileInfo {
 	return f.fi
 }
 
-// The file's path components joined by '/'.
+// The file's path components including the directory name joined by '/'.
 func (f *File) Path() string {
 	return f.path
 }
@@ -187,20 +188,19 @@ func (f *File) NewReader() Reader {
 	return f.t.newReader(f.Offset(), f.Length())
 }
 
-// NewPassiveReader creates a reader that doesn't trigger piece priority updates.
-// Use for reading already downloaded data without affecting download strategy.
+// NewPassiveReader returns a reader that avoids altering piece priorities while consuming data.
 func (f *File) NewPassiveReader() Reader {
 	return f.t.newPassiveReader(f.Offset(), f.Length())
 }
 
 // Sets the minimum priority for pieces in the File.
 func (f *File) SetPriority(prio PiecePriority) {
-	f.t.cl._mu.internal.Lock() // Use internal lock to bypass deferred actions
+	f.t.cl.lock()
 	if prio != f.prio {
 		f.prio = prio
 		f.t.updatePiecePriorities(f.BeginPieceIndex(), f.EndPieceIndex(), "File.SetPriority")
 	}
-	f.t.cl._mu.internal.Unlock() // Use internal unlock to bypass deferred actions
+	f.t.cl.unlock()
 }
 
 // Returns the priority per File.SetPriority.
@@ -213,20 +213,35 @@ func (f *File) Priority() (prio PiecePriority) {
 
 // Returns the index of the first piece containing data for the file.
 func (f *File) BeginPieceIndex() int {
-	if f.t.usualPieceSize() == 0 {
-		return 0
-	}
-	return pieceIndex(f.offset / int64(f.t.usualPieceSize()))
+	return f.fi.BeginPieceIndex(int64(f.t.usualPieceSize()))
 }
 
 // Returns the index of the piece after the last one containing data for the file.
 func (f *File) EndPieceIndex() int {
-	if f.t.usualPieceSize() == 0 {
-		return 0
-	}
-	return pieceIndex((f.offset + f.length + int64(f.t.usualPieceSize()) - 1) / int64(f.t.usualPieceSize()))
+	return f.fi.EndPieceIndex(int64(f.t.usualPieceSize()))
 }
 
 func (f *File) numPieces() int {
 	return f.EndPieceIndex() - f.BeginPieceIndex()
+}
+
+func (f *File) PieceIndices() iter.Seq[int] {
+	return func(yield func(int) bool) {
+		for i := f.BeginPieceIndex(); i < f.EndPieceIndex(); i++ {
+			if !yield(i) {
+				break
+			}
+		}
+	}
+}
+
+func (f *File) Pieces() iter.Seq[*Piece] {
+	return func(yield func(*Piece) bool) {
+		for i := range f.PieceIndices() {
+			p := f.t.piece(i)
+			if !yield(p) {
+				break
+			}
+		}
+	}
 }

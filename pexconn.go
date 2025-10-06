@@ -42,9 +42,8 @@ func (s *pexConnState) Init(c *PeerConn) {
 	if !ok || xid == 0 || c.t.cl.config.DisablePEX {
 		return
 	}
-	// Check private flag before enabling PEX (BEP 27)
 	if c.t.info != nil && c.t.info.Private != nil && *c.t.info.Private {
-		return // Don't enable PEX for private torrents
+		return
 	}
 	s.xid = xid
 	s.last = nil
@@ -61,9 +60,8 @@ func (s *pexConnState) Init(c *PeerConn) {
 
 // schedule next PEX message
 func (s *pexConnState) sched(delay time.Duration) {
-	// Check if torrent became private (BEP 27)
 	if s.torrent != nil && s.torrent.info != nil && s.torrent.info.Private != nil && *s.torrent.info.Private {
-		return // Don't schedule PEX for private torrents
+		return
 	}
 	s.timer.Reset(delay)
 }
@@ -88,9 +86,8 @@ func (s *pexConnState) numPending() int {
 // Share is called from the writer goroutine if when it is woken up with the write buffers empty
 // Returns whether there's more room on the send buffer to write to.
 func (s *pexConnState) Share(postfn messageWriter) bool {
-	// Check if torrent became private (BEP 27)
-	if s.torrent.info != nil && s.torrent.info.Private != nil && *s.torrent.info.Private {
-		return true // Don't send PEX for private torrents
+	if s.torrent != nil && s.torrent.info != nil && s.torrent.info.Private != nil && *s.torrent.info.Private {
+		return true
 	}
 	select {
 	case <-s.gate:
@@ -139,8 +136,8 @@ func (s *pexConnState) Recv(payload []byte) error {
 		return fmt.Errorf("unmarshalling pex message: %w", err)
 	}
 	s.logger.Printf("received pex message: %v", rx)
-	torrent.Add("pex added peers received", int64(len(rx.Added)))
-	torrent.Add("pex added6 peers received", int64(len(rx.Added6)))
+	addMetric("pex added peers received", int64(len(rx.Added)))
+	addMetric("pex added6 peers received", int64(len(rx.Added6)))
 
 	// "Clients must batch updates to send no more than 1 PEX message per minute."
 	timeSinceLastRecv := time.Since(s.lastRecv)
@@ -153,13 +150,12 @@ func (s *pexConnState) Recv(payload []byte) error {
 	var peers peerInfos
 	peers.AppendFromPex(rx.Added6, rx.Added6Flags)
 	peers.AppendFromPex(rx.Added, rx.AddedFlags)
-	if time.Now().Before(s.torrent.pex.rest) {
-		s.logger.Printf("in cooldown period, incoming PEX discarded")
+	if s.torrent != nil && s.torrent.info != nil && s.torrent.info.Private != nil && *s.torrent.info.Private {
+		s.logger.Printf("ignoring %v PEX peers for private torrent", len(peers))
 		return nil
 	}
-	// Check private flag before adding PEX peers (BEP 27)
-	if s.torrent.info != nil && s.torrent.info.Private != nil && *s.torrent.info.Private {
-		s.logger.Printf("ignoring %v PEX peers for private torrent", len(peers))
+	if time.Now().Before(s.torrent.pex.rest) {
+		s.logger.Printf("in cooldown period, incoming PEX discarded")
 		return nil
 	}
 	added := s.torrent.addPeers(peers)

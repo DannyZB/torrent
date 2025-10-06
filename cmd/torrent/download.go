@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"expvar"
 	"fmt"
@@ -394,15 +395,13 @@ func downloadErr(ctx context.Context, flags downloadFlags) error {
 	if flags.UploadRate != nil {
 		clientConfig.UploadRateLimiter = rate.NewLimiter(
 			rate.Limit(*flags.UploadRate),
-			// Need to ensure the expected peer request length <= the upload
-			// burst. We can't really encode this logic into the ClientConfig as
-			// helper because it's quite specific. We're assuming the
-			// MaxAllocPeerRequestDataPerConn flag is being used to support
-			// this.
+			// Need to ensure the expected peer request length <= the upload burst. We can't really
+			// encode this logic into the ClientConfig as helper because it's quite specific. We're
+			// assuming the MaxAllocPeerRequestDataPerConn flag is being used to support this.
 			max(int(*flags.MaxAllocPeerRequestDataPerConn), 256<<10))
 	}
 	if flags.DownloadRate != nil {
-		clientConfig.DownloadRateLimiter = rate.NewLimiter(rate.Limit(*flags.DownloadRate), 1<<16)
+		clientConfig.DownloadRateLimiter = rate.NewLimiter(rate.Limit(*flags.DownloadRate), 0)
 	}
 	{
 		logger := log.Default.WithNames("main", "client")
@@ -478,7 +477,9 @@ func downloadErr(ctx context.Context, flags downloadFlags) error {
 		}
 	}
 	fmt.Printf("chunks received: %v\n", &torrent.ChunksReceived)
-	spew.Dump(client.ConnStats())
+	var buf bytes.Buffer
+	spew.Fdump(&buf, client.Stats())
+	os.Stdout.Write(buf.Bytes())
 	clStats := client.ConnStats()
 	sentOverhead := clStats.BytesWritten.Int64() - clStats.BytesWrittenData.Int64()
 	log.Printf(

@@ -1,0 +1,7 @@
+merge started on merge/upstream-integration: locking (compatCond + lockWithDeferreds) restored. Proceeding to other subsystems.
+request strategy: client/torrent map now holds *PieceRequestOrder, ajwerner backend idempotent, tidwall backend retains duplicate guard, request selection paths tolerate nil orders.
+webseed subsystem: requester queue + wakeup channels restored; request starts move off client lock, counters and base URL sanitising aligned with fork behaviour.
+storage: file/mmap storages expose Flush, piece wrapper enforces bounds, part-file completion restored; tests pending (toolchain cache permissions blocking go test).
+networking: DHT/PEX paths now respect private torrents (BEP 27), jitter added after client cond wake to stagger announces; test sweep blocked by sandboxed sockets/new listener restrictions.
+client/torrent tuning: stats cache re-added, passive readers avoid reprioritisation churn, message timestamps propagate from reader loop to peers, quick-drop request refresh wired, optional lock debug guards (`TORRENT_LOCK_DEBUG`/cfg.Debug) added for lockWithDeferreds, tracker diagnostics API/docs/example wired up and Deluge UA defaults restored.
+tests: go test ./... -run=^$ with local GOCACHE succeeds; full suite blocked by sandbox (UDP sockets, ~/.cache perms).

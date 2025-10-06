@@ -57,6 +57,8 @@ type reader struct {
 	// Adjust the read/seek window to handle Readers locked to File extents and the like.
 	offset, length int64
 
+	storageReader storageReader
+
 	// Function to dynamically calculate readahead. If nil, readahead is static.
 	readaheadFunc ReadaheadFunc
 
@@ -79,8 +81,7 @@ type reader struct {
 	// after a seek or with a new reader at the starting position.
 	reading    bool
 	responsive bool
-	
-	// If true, this reader doesn't trigger piece priority updates for performance
+	// Passive readers avoid triggering piece priority updates while they consume existing data.
 	passive bool
 }
 
@@ -192,7 +193,7 @@ func (r *reader) readContext(ctx context.Context, b []byte) (n int, err error) {
 		r.posChanged()
 		r.mu.Unlock()
 	}
-	n, err = r.readOnceAt(ctx, b, r.pos)
+	n, err = r.readAt(ctx, b, r.pos)
 	if n == 0 {
 		if err == nil && len(b) > 0 {
 			panic("expected error")
@@ -220,37 +221,40 @@ func init() {
 }
 
 // Wait until some data should be available to read. Tickles the client if it isn't. Returns how
-// much should be readable without blocking.
-func (r *reader) waitAvailable(ctx context.Context, pos, wanted int64, wait bool) (avail int64, err error) {
+// much should be readable without blocking. `block` is whether to block if nothing is available,
+// for successive reads for example.
+func (r *reader) waitAvailable(
+	ctx context.Context,
+	pos, wanted int64,
+	block bool,
+) (avail int64, err error) {
 	t := r.t
 	for {
-		r.t.cl.rLock()
+		t.cl.rLock()
 		avail = r.available(pos, wanted)
 		readerCond := t.piece(int((r.offset + pos) / t.info.PieceLength)).readerCond.Signaled()
-		r.t.cl.rUnlock()
+		t.cl.rUnlock()
 		if avail != 0 {
 			return
 		}
 		var dontWait <-chan struct{}
-		if !wait || wanted == 0 {
+		if !block || wanted == 0 {
 			dontWait = closedChan
 		}
 		select {
+		case <-readerCond:
+			continue
 		case <-r.t.closed.Done():
 			err = errTorrentClosed
-			return
 		case <-ctx.Done():
 			err = ctx.Err()
-			return
 		case <-r.t.dataDownloadDisallowed.On():
 			err = errors.New("torrent data downloading disabled")
 		case <-r.t.networkingEnabled.Off():
 			err = errors.New("torrent networking disabled")
-			return
 		case <-dontWait:
-			return
-		case <-readerCond:
 		}
+		return
 	}
 }
 
@@ -262,25 +266,20 @@ func (r *reader) torrentOffset(readerPos int64) int64 {
 
 // Performs at most one successful read to torrent storage.
 func (r *reader) readOnceAt(ctx context.Context, b []byte, pos int64) (n int, err error) {
-	if pos >= r.length {
-		err = io.EOF
-		return
-	}
 	var avail int64
-	// Limit request to file boundary to prevent reading beyond file end
-	maxWanted := min(int64(len(b)), r.length-pos)
-	avail, err = r.waitAvailable(ctx, pos, maxWanted, n == 0)
+	avail, err = r.waitAvailable(ctx, pos, int64(len(b)), n == 0)
 	if avail == 0 || err != nil {
 		return
 	}
 	firstPieceIndex := pieceIndex(r.torrentOffset(pos) / r.t.info.PieceLength)
 	firstPieceOffset := r.torrentOffset(pos) % r.t.info.PieceLength
-	// avail is already limited to file boundary by maxWanted above
-	b1 := b[:avail]
+	b1 := b[:min(int64(len(b)), avail)]
 	// I think we can get EOF here due to the ReadAt contract. Previously we were forgetting to
 	// return an error so it wasn't noticed. We now try again if there's a storage cap otherwise
 	// convert it to io.UnexpectedEOF.
-	n, err = r.t.readAt(b1, r.torrentOffset(pos))
+	r.initStorageReader()
+	n, err = r.storageReader.ReadAt(b1, r.torrentOffset(pos))
+	//n, err = r.t.readAt(b1, r.torrentOffset(pos))
 	if n != 0 {
 		err = nil
 		return
@@ -301,11 +300,53 @@ func (r *reader) readOnceAt(ctx context.Context, b []byte, pos int64) (n int, er
 	} else {
 		r.slogger().Error("error reading", attrs[:]...)
 	}
-	r.afterReadError(firstPieceIndex)
-	if r.t.hasStorageCap() {
-		// Ensure params weren't modified (Go sux). Recurse to detect infinite loops.
-		return r.readOnceAt(ctx, b, pos)
+	return
+}
+
+// Performs at most one successful read to torrent storage. Try reading, first with the storage
+// reader we already have, then after resetting it (in case data moved for
+// completed/incomplete/promoted etc.). Then try resetting the piece completions. Then after all
+// that if the storage is supposed to be flaky, try all over again. TODO: Filter errors and set log
+// levels appropriately.
+func (r *reader) readAt(ctx context.Context, b []byte, pos int64) (n int, err error) {
+	if pos >= r.length {
+		err = io.EOF
+		return
 	}
+	n, err = r.readOnceAt(ctx, b, pos)
+	if err == nil {
+		return
+	}
+	r.slogger().Error("initial read failed", "err", err)
+
+	err = r.clearStorageReader()
+	if err != nil {
+		err = fmt.Errorf("closing storage reader after first read failed: %w", err)
+		return
+	}
+	r.storageReader = nil
+
+	n, err = r.readOnceAt(ctx, b, pos)
+	if err == nil {
+		return
+	}
+	r.slogger().Error("read failed after reader reset", "err", err)
+
+	r.updatePieceCompletion(pos)
+
+	n, err = r.readOnceAt(ctx, b, pos)
+	if err == nil {
+		return
+	}
+	r.slogger().Error("read failed after completion resync", "err", err)
+
+	if r.t.hasStorageCap() {
+		// Ensure params weren't modified (Go sux). Recurse to detect infinite loops. TODO: I expect
+		// only some errors should pass through here, this might cause us to get stuck if we retry
+		// for any error.
+		return r.readAt(ctx, b, pos)
+	}
+
 	// There should have been something available, avail != 0 here.
 	if err == io.EOF {
 		err = io.ErrUnexpectedEOF
@@ -313,7 +354,9 @@ func (r *reader) readOnceAt(ctx context.Context, b []byte, pos int64) (n int, er
 	return
 }
 
-func (r *reader) afterReadError(firstPieceIndex int) {
+// We pass pos in case we go ahead and implement multiple reads per ReadAt.
+func (r *reader) updatePieceCompletion(pos int64) {
+	firstPieceIndex := pieceIndex(r.torrentOffset(pos) / r.t.info.PieceLength)
 	r.t.cl.lock()
 	// I think there's a panic here caused by the Client being closed before obtaining this
 	// lock. TestDropTorrentWithMmapStorageWhileHashing seems to tickle occasionally in CI.
@@ -344,12 +387,12 @@ func (r *reader) Close() error {
 	r.t.cl.lock()
 	r.t.deleteReader(r)
 	r.t.cl.unlock()
-	return nil
+	return r.clearStorageReader()
 }
 
 func (r *reader) posChanged() {
 	if r.passive {
-		return // Skip piece priority updates for passive readers
+		return
 	}
 	to := r.piecesUncached()
 	from := r.pieces
@@ -396,4 +439,21 @@ func defaultReadaheadFunc(r ReadaheadContext) int64 {
 
 func (r *reader) slogger() *slog.Logger {
 	return r.t.slogger()
+}
+
+func (r *reader) initStorageReader() {
+	if r.storageReader == nil {
+		r.storageReader = r.t.storageReader()
+	}
+}
+
+func (r *reader) clearStorageReader() (err error) {
+	if r.storageReader != nil {
+		err = r.storageReader.Close()
+		if err != nil {
+			return
+		}
+	}
+	r.storageReader = nil
+	return
 }

@@ -2,5 +2,6 @@
 *-run.gob
 .envrc*
 .DS_Store
-go.work*
-/.env
+.gocache
+#gobuild cache
+.gocache/

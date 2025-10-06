@@ -32,7 +32,6 @@ func (pc *PeerConn) initMessageWriter() {
 			return pc.useful()
 		},
 		writeBuffer: new(peerConnMsgWriterBuffer),
-		minFillGap:  10 * time.Millisecond, // Coalesce writes within 10ms
 	}
 }
 
@@ -42,7 +41,9 @@ func (pc *PeerConn) startMessageWriter() {
 }
 
 func (pc *PeerConn) messageWriterRunner() {
+	defer pc.locker().Unlock()
 	defer pc.close()
+	defer pc.locker().Lock()
 	pc.messageWriter.run(pc.t.cl.config.KeepAliveTimeout)
 }
 
@@ -70,10 +71,6 @@ type peerConnMsgWriter struct {
 	totalBytesWritten     int64
 	totalDataBytesWritten int64
 	dataUploadRate        float64
-
-	// Write coalescing to reduce lock frequency
-	lastBufferFill time.Time
-	minFillGap     time.Duration
 }
 
 // Routine that writes to the peer. Some of what to write is buffered by
@@ -87,44 +84,14 @@ func (cn *peerConnMsgWriter) run(keepAliveTimeout time.Duration) {
 		if cn.closed.IsSet() {
 			return
 		}
-
-		// Only call fillWriteBuffer if we have space and might need more data
+		cn.fillWriteBuffer()
+		keepAlive := cn.keepAlive()
 		cn.mu.Lock()
-		bufferHasSpace := cn.writeBuffer.Len() < writeBufferHighWaterLen
-		shouldCoalesce := cn.minFillGap > 0 && time.Since(cn.lastBufferFill) < cn.minFillGap
-		cn.mu.Unlock()
-
-		if bufferHasSpace && !shouldCoalesce {
-			cn.fillWriteBuffer()
-			cn.mu.Lock()
-			cn.lastBufferFill = time.Now()
-			cn.mu.Unlock()
-		}
-
-		cn.mu.Lock()
-		// Check if we need to calculate keepAlive
-		bufferEmpty := cn.writeBuffer.Len() == 0
-		shouldCheckKeepAlive := bufferEmpty && time.Since(lastWrite) >= keepAliveTimeout
-		cn.mu.Unlock()
-
-		// Call keepAlive without holding the lock to avoid deadlock
-		var needKeepAlive bool
-		if shouldCheckKeepAlive {
-			needKeepAlive = cn.keepAlive()
-		}
-
-		// Re-acquire lock to update buffer if needed
-		cn.mu.Lock()
-		// Re-check buffer empty state in case it changed
-		bufferEmpty = cn.writeBuffer.Len() == 0
-		if bufferEmpty && needKeepAlive {
+		if cn.writeBuffer.Len() == 0 && time.Since(lastWrite) >= keepAliveTimeout && keepAlive {
 			cn.writeBuffer.Write(pp.Message{Keepalive: true}.MustMarshalBinary())
-			if debugMetricsEnabled {
-				torrent.Add("written keepalives", 1)
-			}
-			bufferEmpty = false
+			addMetric("written keepalives", 1)
 		}
-		if bufferEmpty {
+		if cn.writeBuffer.Len() == 0 {
 			writeCond := cn.writeCond.Signaled()
 			cn.mu.Unlock()
 			select {
@@ -143,26 +110,18 @@ func (cn *peerConnMsgWriter) run(keepAliveTimeout time.Duration) {
 		var err error
 		startedWriting := time.Now()
 		startingBufLen := frontBuf.Len()
-
-		// Optimized write loop - write larger chunks when possible
-		buf := frontBuf.Bytes()
-		for len(buf) > 0 {
-			n, writeErr := cn.w.Write(buf)
-			if n > 0 {
-				buf = buf[n:]
-				frontBuf.Next(n)
+		for frontBuf.Len() != 0 {
+			next := frontBuf.Bytes()
+			var n int
+			n, err = cn.w.Write(next)
+			frontBuf.Next(n)
+			if err == nil && n != len(next) {
+				panic("expected full write")
 			}
-			if writeErr != nil {
-				err = writeErr
-				break
-			}
-			// Safety check: if no progress and no error, break to prevent infinite loop
-			if n == 0 {
-				err = io.ErrShortWrite
+			if err != nil {
 				break
 			}
 		}
-
 		if err != nil {
 			cn.logger.WithDefaultLevel(log.Debug).Printf("error writing: %v", err)
 			return
@@ -170,9 +129,7 @@ func (cn *peerConnMsgWriter) run(keepAliveTimeout time.Duration) {
 		// Track what was sent and how long it took.
 		writeDuration := time.Since(startedWriting)
 		cn.mu.Lock()
-		if writeDuration.Seconds() > 0 {
-			cn.dataUploadRate = float64(frontBuf.pieceDataBytes) / writeDuration.Seconds()
-		}
+		cn.dataUploadRate = float64(frontBuf.pieceDataBytes) / writeDuration.Seconds()
 		cn.totalWriteDuration += writeDuration
 		cn.totalBytesWritten += int64(startingBufLen)
 		cn.totalDataBytesWritten += int64(frontBuf.pieceDataBytes)
