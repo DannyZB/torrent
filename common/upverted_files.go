@@ -6,14 +6,12 @@ import (
 )
 
 func LengthIterFromUpvertedFiles(fis []metainfo.FileInfo) segments.LengthIter {
-	i := 0
-	return func() (segments.Length, bool) {
-		if i == len(fis) {
-			return -1, false
+	return func(yield func(segments.Length) bool) {
+		for _, fi := range fis {
+			if !yield(segments.Length(fi.Length)) {
+				return
+			}
 		}
-		l := fis[i].Length
-		i++
-		return l, true
 	}
 }
 

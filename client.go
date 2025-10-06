@@ -397,6 +397,7 @@ func NewClient(cfg *ClientConfig) (cl *Client, err error) {
 		cl.config.ListenPort,
 		cl.firewallCallback,
 		cl.logger,
+		cl.config.DisableUTP,
 	)
 	if err != nil {
 		return
