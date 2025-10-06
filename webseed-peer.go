@@ -175,9 +175,10 @@ func (ws *webseedPeer) signalRequester() {
 }
 
 func (ws *webseedPeer) enqueueRequestSpawn(begin, end RequestIndex, logger *slog.Logger) {
-	ws.locker.Lock()
+	// NOTE: This is called from updateWebseedRequests which already holds the Client lock.
+	// ws.locker IS the Client lock (set in torrent.go:3197), so we must NOT lock here
+	// or we'll deadlock on recursive lock acquisition.
 	if ws.requesterWakeup == nil {
-		ws.locker.Unlock()
 		return
 	}
 	ws.requestQueue = append(ws.requestQueue, webseedRequestSpawn{
@@ -185,7 +186,6 @@ func (ws *webseedPeer) enqueueRequestSpawn(begin, end RequestIndex, logger *slog
 		end:    end,
 		logger: logger,
 	})
-	ws.locker.Unlock()
 	ws.signalRequester()
 }
 
