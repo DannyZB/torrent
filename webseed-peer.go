@@ -275,7 +275,14 @@ func (ws *webseedPeer) processRequestSpawn(requesterIndex int, spawn webseedRequ
 	t := ws.peer.t
 	cl := t.cl
 	g.MakeMapIfNil(&cl.activeWebseedRequests)
-	g.MapMustAssignNew(cl.activeWebseedRequests, ws.getRequestKey(wsReq), wsReq)
+	requestKey := ws.getRequestKey(wsReq)
+	// Check if a request for this slice already exists in the global map.
+	// This can happen if multiple requesters spawn requests that map to the same sliceIndex.
+	if existingReq, exists := cl.activeWebseedRequests[requestKey]; exists {
+		// Cancel the existing request before replacing it
+		existingReq.Cancel("replaced by new request for same slice")
+	}
+	cl.activeWebseedRequests[requestKey] = wsReq
 	ws.peer.updateExpectingChunks()
 	panicif.Zero(ws.hostKey)
 	cl.numWebSeedRequests[ws.hostKey]++
