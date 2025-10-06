@@ -403,9 +403,10 @@ func (cn *webseedPeer) providedBadData() {
 
 func (ws *webseedPeer) onClose() {
 	ws.closeRequesters()
-	ws.locker.Lock()
+	// NOTE: This is called from Peer.close → Torrent.close → Drop
+	// which already holds the Client lock. ws.locker IS the Client lock
+	// (set in torrent.go:3197), so we must NOT lock here or we'll deadlock.
 	ws.requestQueue = nil
-	ws.locker.Unlock()
 	ws.peer.t.iterPeers(func(p *Peer) {
 		if p.isLowOnRequests() {
 			p.onNeedUpdateRequests("webseedPeer.onClose")
