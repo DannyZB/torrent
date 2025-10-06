@@ -195,12 +195,12 @@ func (f *File) NewPassiveReader() Reader {
 
 // Sets the minimum priority for pieces in the File.
 func (f *File) SetPriority(prio PiecePriority) {
-	f.t.cl.lock()
+	f.t.cl._mu.internal.Lock() // Use internal lock to bypass deferred actions
 	if prio != f.prio {
 		f.prio = prio
 		f.t.updatePiecePriorities(f.BeginPieceIndex(), f.EndPieceIndex(), "File.SetPriority")
 	}
-	f.t.cl.unlock()
+	f.t.cl._mu.internal.Unlock() // Use internal unlock to bypass deferred actions
 }
 
 // Returns the priority per File.SetPriority.
