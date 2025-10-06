@@ -1537,14 +1537,14 @@ func (t *Torrent) updatePeerRequestsForPiece(piece pieceIndex, reason updateRequ
 // Stuff we don't want to run when the pending pieces change while benchmarking.
 func (t *Torrent) onPiecePendingTriggers(piece pieceIndex) {
 	t.maybeNewConns()
-	// Check if we're in internal lock context (allowDefers=false) or regular lock context (allowDefers=true)
+	// Only publish state changes when defers are allowed (regular lock context).
+	// When allowDefers=false (internal lock context), skip publishing to avoid deadlock:
+	// publishStateChange() → Publish() can block on channel send while holding Client lock.
 	if t.cl._mu.allowDefers {
-		// Regular lock context: defer for deduplication
 		t.deferPublishPieceStateChange(piece)
-	} else {
-		// Internal lock context: direct call to avoid pubsub deadlock
-		t.piece(piece).publishStateChange()
 	}
+	// When allowDefers=false: skip publishing entirely - internal locks are used in
+	// performance-critical paths where blocking on Publish() is unacceptable
 }
 
 // Pending pieces is an old bitmap of stuff we want. I think it's more nuanced than that now with
