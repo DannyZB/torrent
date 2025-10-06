@@ -1806,15 +1806,15 @@ func (cn *PeerConn) onNeedUpdateRequests(reason updateRequestReason) {
 		return
 	}
 	cn.needRequestUpdate = reason
-	// Run this before the Client lock is released.
-	// Check if we're in internal lock context (allowDefers=false) or regular lock context (allowDefers=true)
+	// Only schedule request update when defers are allowed (regular lock context).
+	// When allowDefers=false (internal lock context), skip to avoid deadlock:
+	// handleOnNeedUpdateRequests() → tickleWriter() → writeCond.Broadcast() wakes writer
+	// → fillWriteBuffer() tries to acquire Client lock → DEADLOCK
 	if cn.locker().allowDefers {
-		// Regular lock context: defer for batching
 		cn.locker().DeferUniqueUnaryFunc(cn, cn.handleOnNeedUpdateRequests)
-	} else {
-		// Internal lock context: call directly to avoid panic
-		cn.handleOnNeedUpdateRequests()
 	}
+	// When allowDefers=false: skip entirely - can't defer (would panic) and
+	// can't call directly (deadlock via fillWriteBuffer)
 }
 
 // Returns true if it was valid to reject the request.
