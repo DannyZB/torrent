@@ -1853,7 +1853,9 @@ func (t *Torrent) needData() bool {
 	if !t.haveInfo() {
 		return true
 	}
-	t.checkPendingPiecesMatchesRequestOrder()
+	if debugMetricsEnabled {
+		t.checkPendingPiecesMatchesRequestOrder()
+	}
 	return !t._pendingPieces.IsEmpty()
 }
 
