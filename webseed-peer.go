@@ -199,9 +199,11 @@ func (ws *webseedPeer) closeRequesters() {
 	default:
 		close(ws.requesterClosed)
 	}
-	ws.locker.Lock()
+	// NOTE: This is called from onClose → Peer.close → Torrent.close → Drop
+	// which already holds the Client lock. ws.locker IS the Client lock
+	// (set in torrent.go:3197), so we must NOT lock here or we'll deadlock
+	// on recursive lock acquisition.
 	ws.requesterWakeup = nil
-	ws.locker.Unlock()
 }
 
 func (ws *webseedPeer) requesterLoop(index int) {
