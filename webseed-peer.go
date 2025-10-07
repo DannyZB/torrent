@@ -393,7 +393,13 @@ func (ws *webseedPeer) deleteActiveRequest(wr *webseedRequest) {
 	g.MustDelete(ws.activeRequests, wr)
 	cl := ws.peer.cl
 	cl.numWebSeedRequests[ws.hostKey]--
-	g.MustDelete(cl.activeWebseedRequests, ws.getRequestKey(wr))
+	key := ws.getRequestKey(wr)
+	// Only delete from Client map if entry still points to this request.
+	// When Request A is replaced by Request B (same sliceIndex), Request B overwrites
+	// the Client map entry. Request A's cleanup must not delete Request B's entry.
+	if cl.activeWebseedRequests[key] == wr {
+		delete(cl.activeWebseedRequests, key)
+	}
 	ws.peer.updateExpectingChunks()
 }
 
