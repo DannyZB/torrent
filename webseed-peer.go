@@ -279,8 +279,12 @@ func (ws *webseedPeer) processRequestSpawn(requesterIndex int, spawn webseedRequ
 	// Check if a request for this slice already exists in the global map.
 	// This can happen if multiple requesters spawn requests that map to the same sliceIndex.
 	if existingReq, exists := cl.activeWebseedRequests[requestKey]; exists {
-		// Cancel the existing request before replacing it
+		// Cancel the existing request and immediately remove from per-torrent map.
+		// This prevents the assertion from seeing both old and new in ws.activeRequests
+		// while only new is in cl.activeWebseedRequests.
 		existingReq.Cancel("replaced by new request for same slice")
+		delete(ws.activeRequests, existingReq)
+		cl.numWebSeedRequests[ws.hostKey]--
 	}
 	cl.activeWebseedRequests[requestKey] = wsReq
 	ws.peer.updateExpectingChunks()
@@ -390,10 +394,20 @@ func (ws *webseedPeer) sliceProcessor(webseedRequest *webseedRequest) {
 }
 
 func (ws *webseedPeer) deleteActiveRequest(wr *webseedRequest) {
-	g.MustDelete(ws.activeRequests, wr)
-	cl := ws.peer.cl
-	cl.numWebSeedRequests[ws.hostKey]--
-	g.MustDelete(cl.activeWebseedRequests, ws.getRequestKey(wr))
+	// Use regular delete instead of MustDelete because the request might have already
+	// been removed during replacement (when a new request for the same slice spawned).
+	if _, exists := ws.activeRequests[wr]; exists {
+		delete(ws.activeRequests, wr)
+		cl := ws.peer.cl
+		cl.numWebSeedRequests[ws.hostKey]--
+		key := ws.getRequestKey(wr)
+		// Only delete from Client map if entry still points to this request.
+		// When Request A is replaced by Request B (same sliceIndex), Request B overwrites
+		// the Client map entry. Request A's cleanup must not delete Request B's entry.
+		if cl.activeWebseedRequests[key] == wr {
+			delete(cl.activeWebseedRequests, key)
+		}
+	}
 	ws.peer.updateExpectingChunks()
 }
 
