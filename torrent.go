@@ -1748,7 +1748,30 @@ func (t *Torrent) setPieceCompletionFromStorage(piece pieceIndex) bool {
 }
 
 func (t *Torrent) setInitialPieceCompletionFromStorage(piece pieceIndex) {
-	t.setCachedPieceCompletionFromStorage(piece)
+	// During initial setup, we MUST get storage completion status (Ok: true) even if
+	// DisableInitialPieceCheck is true. Otherwise ignoreForRequests() will block all downloads.
+	// The ignoreUnverifiedPieceCompletion check in pieceCompleteUncached() should only apply
+	// to runtime queries, not initial setup. So we bypass it here and query storage directly.
+	p := t.piece(piece)
+	var uncached storage.Completion
+	if t.storage == nil {
+		uncached = storage.Completion{Complete: false, Ok: false}
+	} else {
+		uncached = p.Storage().Completion()
+	}
+	if uncached.Err != nil {
+		t.slogger().Error("error getting piece completion", "err", uncached.Err)
+		t.disallowDataDownloadLocked()
+	}
+	// CRITICAL FIX: For newly added torrents, storage returns Ok: false (meaning "I don't know").
+	// Upstream commit 1494f914 (Aug 5, 2025) made ignoreForRequests() block pieces with Ok: false.
+	// For initial setup, treat unknown pieces as incomplete but available for download.
+	// This fixes the regression where DisableInitialPieceCheck prevented all downloads.
+	if !uncached.Ok {
+		uncached.Ok = true
+		uncached.Complete = false
+	}
+	t.setCachedPieceCompletion(piece, g.OptionFromTuple(uncached.Complete, uncached.Ok))
 	t.afterSetPieceCompletion(piece, true)
 }
 
