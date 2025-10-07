@@ -402,6 +402,11 @@ func (me *PeerConn) remoteRejectsCancels() bool {
 }
 
 func (cn *PeerConn) fillWriteBuffer() {
+	// Always process request updates first - critical for download progress.
+	// Even when buffer is full, we need to update request state to avoid stalls.
+	cn.requestMissingHashes()
+	cn.maybeUpdateActualRequestState()
+
 	if cn.messageWriter.writeBuffer.Len() > writeBufferLowWaterLen {
 		// Fully committing to our max requests requires sufficient space (see
 		// maxLocalToRemoteRequests). Flush what we have instead. We also prefer always to make
@@ -411,8 +416,7 @@ func (cn *PeerConn) fillWriteBuffer() {
 		// knowledge of write buffers.
 		return
 	}
-	cn.requestMissingHashes()
-	cn.maybeUpdateActualRequestState()
+
 	if cn.pex.IsEnabled() {
 		if flow := cn.pex.Share(cn.write); !flow {
 			return
@@ -1815,6 +1819,9 @@ func (cn *PeerConn) onNeedUpdateRequests(reason updateRequestReason) {
 		// Writer will process needRequestUpdate flag via maybeUpdateActualRequestState().
 		// tickleWriter() just calls Broadcast() which is non-blocking - writer will wait
 		// for lock to be released, then process the update.
+		if cn.t.cl.config.Debug {
+			cn.logger.Printf("DEBUG: onNeedUpdateRequests with allowDefers=false, reason=%s, calling tickleWriter", reason)
+		}
 		cn.tickleWriter()
 	}
 }

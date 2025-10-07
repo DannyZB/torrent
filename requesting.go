@@ -269,6 +269,9 @@ func (p *PeerConn) maybeUpdateActualRequestState() {
 	if p.needRequestUpdate == "" {
 		return
 	}
+	if p.t.cl.config.Debug {
+		p.logger.Printf("DEBUG: maybeUpdateActualRequestState called, needRequestUpdate=%s", p.needRequestUpdate)
+	}
 	p.updateRequestsWithReason(p.needRequestUpdate)
 }
 
