@@ -266,6 +266,16 @@ func (r *reader) torrentOffset(readerPos int64) int64 {
 
 // Performs at most one successful read to torrent storage.
 func (r *reader) readOnceAt(ctx context.Context, b []byte, pos int64) (n int, err error) {
+	// Limit read to reader's length boundary to prevent reading past file end
+	maxRead := r.length - pos
+	if maxRead <= 0 {
+		err = io.EOF
+		return
+	}
+	if int64(len(b)) > maxRead {
+		b = b[:maxRead]
+	}
+
 	var avail int64
 	avail, err = r.waitAvailable(ctx, pos, int64(len(b)), n == 0)
 	if avail == 0 || err != nil {
