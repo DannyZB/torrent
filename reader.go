@@ -266,24 +266,21 @@ func (r *reader) torrentOffset(readerPos int64) int64 {
 
 // Performs at most one successful read to torrent storage.
 func (r *reader) readOnceAt(ctx context.Context, b []byte, pos int64) (n int, err error) {
-	// Limit read to reader's length boundary to prevent reading past file end
-	maxRead := r.length - pos
-	if maxRead <= 0 {
+	if pos >= r.length {
 		err = io.EOF
 		return
 	}
-	if int64(len(b)) > maxRead {
-		b = b[:maxRead]
-	}
-
 	var avail int64
-	avail, err = r.waitAvailable(ctx, pos, int64(len(b)), n == 0)
+	// Limit request to file boundary to prevent reading beyond file end
+	maxWanted := min(int64(len(b)), r.length-pos)
+	avail, err = r.waitAvailable(ctx, pos, maxWanted, n == 0)
 	if avail == 0 || err != nil {
 		return
 	}
 	firstPieceIndex := pieceIndex(r.torrentOffset(pos) / r.t.info.PieceLength)
 	firstPieceOffset := r.torrentOffset(pos) % r.t.info.PieceLength
-	b1 := b[:min(int64(len(b)), avail)]
+	// avail is already limited to file boundary by maxWanted above
+	b1 := b[:avail]
 	// I think we can get EOF here due to the ReadAt contract. Previously we were forgetting to
 	// return an error so it wasn't noticed. We now try again if there's a storage cap otherwise
 	// convert it to io.UnexpectedEOF.

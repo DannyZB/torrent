@@ -1291,7 +1291,18 @@ func (t *Torrent) hashPiece(piece pieceIndex) (
 		})
 		correct = sum == p.hashV2.Value
 	} else {
-		expected := p.mustGetOnlyFile().piecesRoot.Unwrap()
+		// For v2 torrents without piece layers, we use per-file merkle root hashing.
+		// This requires a single-file piece with a valid piecesRoot.
+		if p.numFiles() != 1 {
+			err = fmt.Errorf("piece %v: expected single file for piecesRoot hashing, got %v files", piece, p.numFiles())
+			return
+		}
+		file := p.mustGetOnlyFile()
+		if !file.piecesRoot.Ok {
+			err = fmt.Errorf("piece %v: file piecesRoot not available for hashing", piece)
+			return
+		}
+		expected := file.piecesRoot.Value
 		h := merkle.NewHash()
 		differingPeers, err = t.hashPieceWithSpecificHash(piece, h)
 		var sum [32]byte
