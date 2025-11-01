@@ -70,9 +70,19 @@ func newRequest(
 ) (*http.Request, error) {
 	fileInfo := info.UpvertedFiles()[fileIndex]
 	url_ = urlForFileIndex(url_, fileIndex, info, pathEscaper)
+
+	// Validate URL scheme before attempting to create request
+	parsedURL, err := url.Parse(url_)
+	if err != nil {
+		return nil, fmt.Errorf("invalid webseed URL %q: %w", url_, err)
+	}
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return nil, fmt.Errorf("invalid webseed URL scheme %q (must be http or https): %s", parsedURL.Scheme, url_)
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url_, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create HTTP request for %q: %w", url_, err)
 	}
 	// We avoid Range requests if we can. We check the Content-Length elsewhere so that early
 	// detection is not lost. TODO: Try disabling this for CloudFlare?

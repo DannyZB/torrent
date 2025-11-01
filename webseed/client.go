@@ -123,7 +123,17 @@ func (ws *Client) StartNewRequest(ctx context.Context, r RequestSpec, debugLogge
 			baseURL, i, ws.info, e.Start, e.Length,
 			ws.PathEscaper,
 		)
-		panicif.Err(err)
+		if err != nil {
+			// Log the error and skip this part instead of panicking
+			ws.Logger.Error("failed to create webseed request",
+				"error", err,
+				"baseURL", baseURL,
+				"fileIndex", i,
+				"offset", e.Start,
+				"length", e.Length,
+			)
+			continue
+		}
 		part := requestPart{
 			req:        req,
 			fileRange:  e,
@@ -151,7 +161,6 @@ func (ws *Client) StartNewRequest(ctx context.Context, r RequestSpec, debugLogge
 	// Technically what we want to ensure is that all parts exist consecutively. If the file data
 	// isn't consecutive, then it is piece aligned and we wouldn't need to be doing multiple
 	// requests. TODO: Assert this.
-	panicif.Zero(len(requestParts))
 	body, w := io.Pipe()
 	req := Request{
 		ctx:      ctx,
@@ -159,7 +168,13 @@ func (ws *Client) StartNewRequest(ctx context.Context, r RequestSpec, debugLogge
 		Body:     body,
 		bodyPipe: body,
 	}
-	go ws.requestPartResponsesReader(ctx, w, requestParts)
+	if len(requestParts) == 0 {
+		// All request parts failed to be created. Close the pipe with an error.
+		ws.Logger.Error("no valid request parts could be created for webseed", "baseURL", baseURL)
+		_ = w.CloseWithError(fmt.Errorf("no valid request parts could be created for webseed URL: %s", baseURL))
+	} else {
+		go ws.requestPartResponsesReader(ctx, w, requestParts)
+	}
 	return req
 }
 
