@@ -3805,10 +3805,17 @@ func (t *Torrent) endRequestIndexForFileIndex(fileIndex int) RequestIndex {
 }
 
 func (t *Torrent) wantReceiveChunk(reqIndex RequestIndex) bool {
+	// For file-aligned/V2 torrents, the request index encoding can have "holes" where
+	// reqIndex % chunksPerRegularPiece exceeds the actual chunk count for that piece.
+	// Check this before calling requestIndexToRequest which would panic.
+	pi := t.pieceIndexOfRequestIndex(reqIndex)
+	chunkInPiece := reqIndex % t.chunksPerRegularPiece()
+	if chunkInPiece >= chunkIndexType(t.pieceNumChunks(pi)) {
+		return false
+	}
 	if t.checkValidReceiveChunk(t.requestIndexToRequest(reqIndex)) != nil {
 		return false
 	}
-	pi := t.pieceIndexOfRequestIndex(reqIndex)
 	if t.ignorePieceForRequests(pi) {
 		return false
 	}
