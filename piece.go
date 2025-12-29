@@ -161,7 +161,9 @@ func (p *Piece) iterCleanChunks(it *roaring.IntIterator) iter.Seq[chunkIndexType
 	return func(yield func(chunkIndexType) bool) {
 		it.Initialize(&p.t.dirtyChunks.Bitmap)
 		begin := uint32(p.requestIndexBegin())
-		end := uint32(p.requestIndexMaxEnd())
+		// Use actual chunk count, not requestIndexMaxEnd() which over-estimates for
+		// file-aligned/V2 torrents where pieces can have fewer chunks than chunksPerRegularPiece
+		end := begin + uint32(p.numChunks())
 		it.AdvanceIfNeeded(begin)
 		for next := begin; next < end; next++ {
 			if !it.HasNext() || it.Next() != next {
