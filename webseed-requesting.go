@@ -387,6 +387,12 @@ func (cl *Client) iterPossibleWebseedRequests() iter.Seq2[webseedUniqueRequestKe
 						return true
 					}
 					p := t.piece(pieceIndex)
+					// For file-aligned/V2 torrents, pieceRequestIndexBegin uses chunksPerRegularPiece
+					// which assumes uniform piece sizes. This can produce request indices beyond
+					// maxEndRequest for pieces at file boundaries. Skip such pieces.
+					if p.requestIndexBegin() >= t.maxEndRequest() {
+						return true
+					}
 					cleanOpt := p.firstCleanChunk()
 					if !cleanOpt.Ok {
 						return true
@@ -396,6 +402,8 @@ func (cl *Client) iterPossibleWebseedRequests() iter.Seq2[webseedUniqueRequestKe
 					// etc. Order state priority would be faster otherwise.
 					priority := p.effectivePriority()
 					firstRequest := p.requestIndexBegin() + cleanOpt.Value
+					// With the above check and bounded cleanOpt from iterCleanChunks,
+					// firstRequest should always be valid. Assert to catch any remaining issues.
 					panicif.GreaterThanOrEqual(firstRequest, t.maxEndRequest())
 					webseedSliceIndex := t.requestIndexToWebseedSliceIndex(firstRequest)
 					for url, ws := range t.webSeeds {
