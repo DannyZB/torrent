@@ -380,12 +380,15 @@ func (r *reader) updatePieceCompletion(pos int64) {
 	}
 	// Update the rest of the piece completions in the readahead window, without alerting to
 	// changes (since only the first piece, the one above, could have generated the read error
-	// we're currently handling).
-	if r.pieces.begin != firstPieceIndex {
-		panic(fmt.Sprint(r.pieces.begin, firstPieceIndex))
-	}
-	for index := r.pieces.begin + 1; index < r.pieces.end; index++ {
-		r.t.updatePieceCompletion(index)
+	// we're currently handling). Passive readers don't track pieces (posChanged is a no-op),
+	// so the readahead window is not meaningful.
+	if !r.passive {
+		if r.pieces.begin != firstPieceIndex {
+			panic(fmt.Sprint(r.pieces.begin, firstPieceIndex))
+		}
+		for index := r.pieces.begin + 1; index < r.pieces.end; index++ {
+			r.t.updatePieceCompletion(index)
+		}
 	}
 }
 
