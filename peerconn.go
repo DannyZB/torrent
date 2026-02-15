@@ -271,7 +271,9 @@ func (cn *PeerConn) onClose() {
 // Writes a message into the write buffer. Returns whether it's okay to keep writing. Writing is
 // done asynchronously, so it may be that we're not able to honour backpressure from this method.
 func (cn *PeerConn) write(msg pp.Message) bool {
-	addMetric(fmt.Sprintf("messages written of type %s", msg.Type.String()), 1)
+	if debugMetricsEnabled {
+		addMetric(fmt.Sprintf("messages written of type %s", msg.Type.String()), 1)
+	}
 	// We don't need to track bytes here because the connection's Writer has that behaviour injected
 	// (although there's some delay between us buffering the message, and the connection writer
 	// flushing it out.).
@@ -599,13 +601,15 @@ func (c *PeerConn) requestPendingMetadata() {
 }
 
 func (cn *PeerConn) wroteMsg(msg *pp.Message) {
-	addMetric(fmt.Sprintf("messages written of type %s", msg.Type.String()), 1)
-	if msg.Type == pp.Extended {
-		for name, id := range cn.PeerExtensionIDs {
-			if id != msg.ExtendedID {
-				continue
+	if debugMetricsEnabled {
+		addMetric(fmt.Sprintf("messages written of type %s", msg.Type.String()), 1)
+		if msg.Type == pp.Extended {
+			for name, id := range cn.PeerExtensionIDs {
+				if id != msg.ExtendedID {
+					continue
+				}
+				addMetric(fmt.Sprintf("Extended messages written for protocol %q", name), 1)
 			}
-			addMetric(fmt.Sprintf("Extended messages written for protocol %q", name), 1)
 		}
 	}
 	cn.modifyRelevantConnStats(func(cs *ConnStats) { cs.wroteMsg(msg) })
@@ -1462,8 +1466,7 @@ func (pc *PeerConn) onReadHashes(msg *pp.Message) (err error) {
 		pc.receivedHashPieces[msg.PiecesRoot] = filePieceHashes
 	}
 	if msg.ProofLayers != 0 {
-		// This isn't handled yet.
-		panic(msg.ProofLayers)
+		return fmt.Errorf("proof layers not supported: %d", msg.ProofLayers)
 	}
 	copy(filePieceHashes[msg.Index:], msg.Hashes)
 	root := merkle.RootWithPadHash(

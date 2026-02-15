@@ -671,9 +671,11 @@ func (cl *Client) acceptConnections(l Listener) {
 					conn.RemoteAddr(),
 				)
 			})
-			addMetric(fmt.Sprintf("accepted conn remote IP len=%d", len(addrIpOrNil(conn.RemoteAddr()))), 1)
-			addMetric(fmt.Sprintf("accepted conn network=%s", conn.RemoteAddr().Network()), 1)
-			addMetric(fmt.Sprintf("accepted on %s listener", l.Addr().Network()), 1)
+			if debugMetricsEnabled {
+				addMetric(fmt.Sprintf("accepted conn remote IP len=%d", len(addrIpOrNil(conn.RemoteAddr()))), 1)
+				addMetric(fmt.Sprintf("accepted conn network=%s", conn.RemoteAddr().Network()), 1)
+				addMetric(fmt.Sprintf("accepted on %s listener", l.Addr().Network()), 1)
+			}
 		}()
 	}
 }
