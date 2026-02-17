@@ -2,7 +2,6 @@ package metainfo
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -32,6 +31,8 @@ type MetaInfo struct {
 }
 
 // Load a MetaInfo from an io.Reader. Returns a non-nil error in case of failure.
+// Trailing data after valid bencoded metainfo is tolerated (some .torrent files
+// have extra bytes appended by clients or trackers).
 func Load(r io.Reader) (*MetaInfo, error) {
 	var mi MetaInfo
 	d := bencode.NewDecoder(r)
@@ -39,11 +40,9 @@ func Load(r io.Reader) (*MetaInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = d.ReadEOF()
-	if err != nil {
-		err = fmt.Errorf("error after decoding metainfo: %w", err)
-	}
-	return &mi, err
+	// Ignore trailing data — the metainfo itself decoded successfully.
+	_ = d.ReadEOF()
+	return &mi, nil
 }
 
 // Convenience function for loading a MetaInfo from a file.
