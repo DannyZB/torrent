@@ -123,12 +123,19 @@ func (t *Torrent) Drop() {
 		return
 	}
 	t.cl.lock()
-	defer t.cl.unlock()
 	if t.closed.IsSet() {
+		t.cl.unlock()
 		return
 	}
 	var wg sync.WaitGroup
 	t.close(&wg)
+	// Release Client.lock before waiting. close() does all state cleanup
+	// (marks closed, cancels contexts, closes peers, removes from maps)
+	// under Client.lock. The WaitGroup only waits for the storage close
+	// goroutine, which needs storageLock.Lock (write). If a pieceHasher
+	// holds storageLock.RLock and needs Client.lock to finish, holding
+	// Client.lock here would deadlock.
+	t.cl.unlock()
 	wg.Wait()
 }
 
