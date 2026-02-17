@@ -36,6 +36,7 @@ import (
 	"github.com/anacrolix/missinggo/v2/pubsub"
 	"github.com/anacrolix/multiless"
 	"github.com/anacrolix/sync"
+	stdsync "sync"
 
 	"github.com/pion/webrtc/v4"
 	"golang.org/x/sync/errgroup"
@@ -112,7 +113,12 @@ type Torrent struct {
 	// Storage for torrent data.
 	storage *storage.Torrent
 	// Read-locked for using storage, and write-locked for Closing.
-	storageLock sync.RWMutex
+	// Uses standard sync.RWMutex (not anacrolix/sync) to preserve shared
+	// read semantics when PPROF_SYNC is enabled. anacrolix/sync.RWMutex
+	// converts RLock to exclusive Lock under PPROF_SYNC, which causes a
+	// deadlock between pieceHasher (storageLock→Client.lock) and
+	// receiveChunk/startHash (Client.lock→storageLock).
+	storageLock stdsync.RWMutex
 
 	announceList metainfo.AnnounceList
 
