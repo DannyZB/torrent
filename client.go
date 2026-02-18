@@ -1956,6 +1956,12 @@ func (cl *Client) locker() *lockWithDeferreds {
 	return &cl._mu
 }
 
+// LockDebugInfo returns diagnostic info about the current Client.lock holder.
+// Safe to call without holding the lock. Returns empty string if debug is off.
+func (cl *Client) LockDebugInfo() string {
+	return cl._mu.DebugInfo()
+}
+
 func (cl *Client) String() string {
 	return fmt.Sprintf("<%[1]T %[1]p>", cl)
 }

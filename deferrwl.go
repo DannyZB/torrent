@@ -207,6 +207,25 @@ func captureStack() []byte {
 	}
 }
 
+// DebugInfo returns a human-readable string describing the current lock holder.
+// Safe to call concurrently (reads are racy but acceptable for diagnostics).
+// Returns empty string if debug is not enabled or lock is not held.
+func (me *lockWithDeferreds) DebugInfo() string {
+	d := me.debug
+	if d == nil {
+		return "debug not enabled (set TORRENT_LOCK_DEBUG=stack)"
+	}
+	owner := d.owner
+	if owner == 0 {
+		return "lock not held"
+	}
+	stack := string(d.lastStack)
+	if stack == "" {
+		return fmt.Sprintf("lock %q held by goroutine %d (no stack captured, set TORRENT_LOCK_DEBUG=stack)", d.name, owner)
+	}
+	return fmt.Sprintf("lock %q held by goroutine %d\n%s", d.name, owner, stack)
+}
+
 func currentGoroutineID() int64 {
 	const prefix = "goroutine "
 	buf := make([]byte, 64)
