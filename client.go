@@ -1962,6 +1962,11 @@ func (cl *Client) LockDebugInfo() string {
 	return cl._mu.DebugInfo()
 }
 
+// LockDebugSnapshot returns a structured snapshot of the Client.lock state.
+func (cl *Client) LockDebugSnapshot() LockDebugSnapshot {
+	return cl._mu.DebugSnapshot()
+}
+
 func (cl *Client) String() string {
 	return fmt.Sprintf("<%[1]T %[1]p>", cl)
 }

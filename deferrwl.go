@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	g "github.com/anacrolix/generics"
 	"github.com/anacrolix/missinggo/v2/panicif"
@@ -161,6 +162,7 @@ func (me *lockWithDeferreds) debugOnLock() {
 	}
 	me.debug.owner = gid
 	me.debug.depth = 1
+	me.debug.lockedAt = time.Now()
 	if me.debug.captureStacks {
 		me.debug.lastStack = captureStack()
 	}
@@ -194,6 +196,7 @@ type lockDebugState struct {
 	depth         int
 	captureStacks bool
 	lastStack     []byte
+	lockedAt      time.Time
 }
 
 func captureStack() []byte {
@@ -207,23 +210,54 @@ func captureStack() []byte {
 	}
 }
 
-// DebugInfo returns a human-readable string describing the current lock holder.
-// Safe to call concurrently (reads are racy but acceptable for diagnostics).
-// Returns empty string if debug is not enabled or lock is not held.
-func (me *lockWithDeferreds) DebugInfo() string {
+// LockDebugSnapshot holds diagnostic info about the current lock state.
+// All fields are safe to read concurrently (racy but acceptable for diagnostics).
+type LockDebugSnapshot struct {
+	Enabled    bool
+	Held       bool
+	Name       string
+	Owner      int64
+	HeldFor    time.Duration
+	Deferred   int
+	AcqStack   string // Stack at Lock() time
+}
+
+// DebugSnapshot returns a structured snapshot of the current lock state.
+func (me *lockWithDeferreds) DebugSnapshot() LockDebugSnapshot {
 	d := me.debug
 	if d == nil {
-		return "debug not enabled (set TORRENT_LOCK_DEBUG=stack)"
+		return LockDebugSnapshot{}
 	}
 	owner := d.owner
 	if owner == 0 {
+		return LockDebugSnapshot{Enabled: true}
+	}
+	return LockDebugSnapshot{
+		Enabled:  true,
+		Held:     true,
+		Name:     d.name,
+		Owner:    owner,
+		HeldFor:  time.Since(d.lockedAt),
+		Deferred: len(me.unlockActions),
+		AcqStack: string(d.lastStack),
+	}
+}
+
+// DebugInfo returns a human-readable string describing the current lock holder.
+// Safe to call concurrently (reads are racy but acceptable for diagnostics).
+func (me *lockWithDeferreds) DebugInfo() string {
+	snap := me.DebugSnapshot()
+	if !snap.Enabled {
+		return "debug not enabled (set TORRENT_LOCK_DEBUG=stack)"
+	}
+	if !snap.Held {
 		return "lock not held"
 	}
-	stack := string(d.lastStack)
-	if stack == "" {
-		return fmt.Sprintf("lock %q held by goroutine %d (no stack captured, set TORRENT_LOCK_DEBUG=stack)", d.name, owner)
+	held := snap.HeldFor.Truncate(time.Millisecond)
+	if snap.AcqStack == "" {
+		return fmt.Sprintf("lock %q held by goroutine %d for %v, %d deferred (no stack, set TORRENT_LOCK_DEBUG=stack)", snap.Name, snap.Owner, held, snap.Deferred)
 	}
-	return fmt.Sprintf("lock %q held by goroutine %d\n%s", d.name, owner, stack)
+	return fmt.Sprintf("lock %q held by goroutine %d for %v, %d deferred\n%s", snap.Name, snap.Owner, held, snap.Deferred, snap.AcqStack)
 }
 
 func currentGoroutineID() int64 {
