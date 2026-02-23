@@ -128,15 +128,12 @@ func (t *Torrent) Drop() {
 		return
 	}
 	var wg sync.WaitGroup
+	// Defers run LIFO: unlock first, then Wait. This ensures:
+	// 1. Client.lock is released before wg.Wait (avoids pieceHasher deadlock)
+	// 2. Client.lock is released even if close() panics (prevents permanent lock leak)
+	defer wg.Wait()
+	defer t.cl.unlock()
 	t.close(&wg)
-	// Release Client.lock before waiting. close() does all state cleanup
-	// (marks closed, cancels contexts, closes peers, removes from maps)
-	// under Client.lock. The WaitGroup only waits for the storage close
-	// goroutine, which needs storageLock.Lock (write). If a pieceHasher
-	// holds storageLock.RLock and needs Client.lock to finish, holding
-	// Client.lock here would deadlock.
-	t.cl.unlock()
-	wg.Wait()
 }
 
 // Number of bytes of the entire torrent we have completed. This is the sum of
