@@ -1172,6 +1172,10 @@ func (c *PeerConn) uploadAllowed() bool {
 	if c.t.seeding() {
 		return true
 	}
+	// BEP 6 optimistic unchoke: allow upload regardless of tit-for-tat.
+	if c.optimisticallyUnchoked {
+		return true
+	}
 	if !c.peerHasWantedPieces() {
 		return false
 	}
@@ -1586,7 +1590,7 @@ func (me *PeerConn) peerPtr() *Peer {
 
 // The actual value to use as the maximum outbound requests.
 func (cn *PeerConn) nominalMaxRequests() maxRequests {
-	return max(1, min(cn.PeerMaxRequests, cn.peakRequests*2, maxLocalToRemoteRequests))
+	return max(16, min(cn.PeerMaxRequests, cn.peakRequests*2, maxLocalToRemoteRequests))
 }
 
 // Set the Peer loggers. This is given Client loggers, and later Torrent loggers when the Torrent is
@@ -1865,11 +1869,11 @@ func (c *PeerConn) deleteRequest(r RequestIndex) bool {
 		f(PeerRequestEvent{c.peerPtr(), c.t.requestIndexToRequest(r)})
 	}
 	c.updateExpectingChunks()
-	// TODO: Can't this happen if a request is stolen?
-	if c.t.requestingPeer(r) != c {
-		panic("only one peer should have a given request at a time")
+	// In endgame mode, multiple peers may have the same request.
+	// Only delete from t.requestState if we are the tracking peer.
+	if c.t.requestingPeer(r) == c {
+		delete(c.t.requestState, r)
 	}
-	delete(c.t.requestState, r)
 	// c.t.iterPeers(func(p *Peer) {
 	// 	if p.isLowOnRequests() {
 	// 		p.onNeedUpdateRequests("Peer.deleteRequest")

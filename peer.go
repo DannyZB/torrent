@@ -81,6 +81,9 @@ type (
 		piecesReceivedSinceLastRequestUpdate   maxRequests
 		maxPiecesReceivedBetweenRequestUpdates maxRequests
 
+		// Set by optimistic unchoking — overrides uploadAllowed for this peer.
+		optimisticallyUnchoked bool
+
 		// Stuff controlled by the remote peer.
 		peerInterested        bool
 		peerChoking           bool

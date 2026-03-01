@@ -384,21 +384,27 @@ func (p *PeerConn) applyRequestState(next desiredRequestState) {
 
 		existing := t.requestingPeer(req)
 		if existing != nil && existing != p {
-			// don't steal on cancel - because this is triggered by t.cancelRequest below
-			// which means that the cancelled can immediately try to steal back a request
-			// it has lost which can lead to circular cancel/add processing
-			if p.needRequestUpdate == peerUpdateRequestsPeerCancelReason {
-				continue
-			}
+			if t.endgameMode {
+				// Endgame: allow duplicate requests to multiple peers for the
+				// last few pieces so completion isn't bottlenecked by one slow peer.
+				// Don't cancel the existing request — just send a duplicate.
+			} else {
+				// don't steal on cancel - because this is triggered by t.cancelRequest below
+				// which means that the cancelled can immediately try to steal back a request
+				// it has lost which can lead to circular cancel/add processing
+				if p.needRequestUpdate == peerUpdateRequestsPeerCancelReason {
+					continue
+				}
 
-			// Don't steal from the poor.
-			diff := int64(current.Requests.GetCardinality()) + 1 - (int64(existing.uncancelledRequests()) - 1)
-			// Steal a request that leaves us with one more request than the existing peer
-			// connection if the stealer more recently received a chunk.
-			if diff > 1 || (diff == 1 && !p.lastUsefulChunkReceived.After(existing.lastUsefulChunkReceived)) {
-				continue
+				// Don't steal from the poor.
+				diff := int64(current.Requests.GetCardinality()) + 1 - (int64(existing.uncancelledRequests()) - 1)
+				// Steal a request that leaves us with one more request than the existing peer
+				// connection if the stealer more recently received a chunk.
+				if diff > 1 || (diff == 1 && !p.lastUsefulChunkReceived.After(existing.lastUsefulChunkReceived)) {
+					continue
+				}
+				t.cancelRequest(req)
 			}
-			t.cancelRequest(req)
 		}
 		more = p.mustRequest(req)
 		if !more {
@@ -424,5 +430,5 @@ func (p *PeerConn) applyRequestState(next desiredRequestState) {
 // specifications. I've set it shorter to trigger it more often for testing for now.
 const (
 	updateRequestsTimerDuration = 3 * time.Second
-	enableUpdateRequestsTimer   = false
+	enableUpdateRequestsTimer   = true
 )

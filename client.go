@@ -1257,6 +1257,27 @@ func (c *PeerConn) updateRequestsTimerFunc() {
 		addMetric("spurious timer requests updates", 1)
 		return
 	}
+	// Drop zombie peers: if we have outstanding requests but haven't received
+	// any useful data in 2 minutes, the peer is unresponsive.
+	if !c.lastUsefulChunkReceived.IsZero() &&
+		time.Since(c.lastUsefulChunkReceived) > 2*time.Minute &&
+		c.requestState.Requests.GetCardinality() > 0 {
+		c.close()
+		return
+	}
+	// Also catch peers that never sent us any data at all after 2 minutes.
+	if c.lastUsefulChunkReceived.IsZero() &&
+		!c.lastBecameInterested.IsZero() &&
+		time.Since(c.lastBecameInterested) > 2*time.Minute &&
+		c.requestState.Requests.GetCardinality() > 0 {
+		c.close()
+		return
+	}
+	// Trigger periodic optimistic unchoke and endgame mode check.
+	// These are torrent-level operations but we piggyback on the per-peer
+	// timer since we already hold the client lock.
+	c.t.maybeOptimisticUnchoke()
+	c.t.updateEndgameMode()
 	c.onNeedUpdateRequests(peerUpdateRequestsTimerReason)
 }
 

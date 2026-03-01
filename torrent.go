@@ -217,6 +217,13 @@ type Torrent struct {
 	initialPieceCheckDisabled bool
 	// See AddTorrentOpts.IgnoreUnverifiedPieceCompletion
 	ignoreUnverifiedPieceCompletion bool
+
+	// Optimistic unchoking (BEP 6): periodically unchoke a random peer.
+	lastOptimisticUnchoke      time.Time
+	optimisticallyUnchokedPeer *PeerConn
+
+	// Endgame mode: when few pieces remain, allow duplicate requesting.
+	endgameMode bool
 }
 
 type torrentTrackerAnnouncerKey struct {
@@ -2079,6 +2086,48 @@ func (t *Torrent) seeding() bool {
 		return false
 	}
 	return true
+}
+
+// maybeOptimisticUnchoke selects a random choked, interested peer to unchoke
+// every 30 seconds, per BEP 6. This lets us discover better peers during
+// tit-for-tat operation (DisableAggressiveUpload=true).
+func (t *Torrent) maybeOptimisticUnchoke() {
+	if time.Since(t.lastOptimisticUnchoke) < 30*time.Second {
+		return
+	}
+	// Clear previous optimistically unchoked peer
+	if p := t.optimisticallyUnchokedPeer; p != nil {
+		p.optimisticallyUnchoked = false
+		t.optimisticallyUnchokedPeer = nil
+	}
+	// Collect candidates: peers we're choking that are interested in our data
+	var candidates []*PeerConn
+	for conn := range t.conns {
+		if conn.choking && conn.peerInterested && !conn.closed.IsSet() {
+			candidates = append(candidates, conn)
+		}
+	}
+	if len(candidates) > 0 {
+		selected := candidates[rand.Intn(len(candidates))]
+		selected.optimisticallyUnchoked = true
+		selected.tickleWriter() // trigger write loop to unchoke
+		t.optimisticallyUnchokedPeer = selected
+	}
+	t.lastOptimisticUnchoke = time.Now()
+}
+
+// updateEndgameMode checks whether we should enter endgame mode.
+// Endgame activates when few pieces remain (<10 or <1% of total),
+// allowing duplicate requesting from multiple peers to speed up completion.
+func (t *Torrent) updateEndgameMode() {
+	if !t.haveInfo() || t.endgameMode {
+		return
+	}
+	pending := t._pendingPieces.GetCardinality()
+	total := uint64(t.numPieces())
+	if pending > 0 && (pending <= 10 || (total > 0 && pending*100/total <= 1)) {
+		t.endgameMode = true
+	}
 }
 
 func (t *Torrent) onWebRtcConn(
