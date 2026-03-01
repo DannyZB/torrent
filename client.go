@@ -352,20 +352,20 @@ func (cl *Client) init(cfg *ClientConfig) {
 
 func configureLockDebug(mu *lockWithDeferreds, name string, cfg *ClientConfig) {
 	val := strings.TrimSpace(os.Getenv("TORRENT_LOCK_DEBUG"))
-	if val != "" {
-		lower := strings.ToLower(val)
-		switch lower {
-		case "0", "off", "false":
-			return
-		case "stack":
-			mu.EnableDebug(name, true)
-			return
-		}
+	if val == "" {
+		return
 	}
-	// Always-on lightweight tracking: goroutine ID + timestamp, no stack capture.
-	// Negligible overhead (~1us per Lock/Unlock from runtime.Stack with 64-byte buffer).
-	// Use TORRENT_LOCK_DEBUG=stack for full stack capture, =off to disable entirely.
-	mu.EnableDebug(name, false)
+	lower := strings.ToLower(val)
+	switch lower {
+	case "0", "off", "false":
+		return
+	case "stack":
+		mu.EnableDebug(name, true)
+	default:
+		// Ownership tracking without stack capture.
+		// Note: still uses runtime.Stack to get goroutine ID — use only for debugging.
+		mu.EnableDebug(name, false)
+	}
 }
 
 // Creates a new Client. Takes ownership of the ClientConfig. Create another one if you want another
