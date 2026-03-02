@@ -257,6 +257,14 @@ func (me *trackerScraper) Run() {
 			interval = time.Minute
 		}
 
+		// Exponential backoff for failing trackers: 2m, 4m, 8m cap
+		if me.consecutiveFails > 0 {
+			backoff := time.Duration(1<<min(me.consecutiveFails, 3)) * time.Minute
+			if backoff > interval {
+				interval = backoff
+			}
+		}
+
 		me.t.cl.lock()
 		wantPeers := me.t.wantPeersEvent.C()
 		me.t.cl.unlock()

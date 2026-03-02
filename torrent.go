@@ -1718,15 +1718,21 @@ func (t *Torrent) numOutgoingConns() (ret int) {
 }
 
 func (t *Torrent) maxHalfOpen() int {
+	if t.maxEstablishedConns <= 0 {
+		return 0
+	}
 	// Note that if we somehow exceed the maximum established conns, we want
 	// the negative value to have an effect.
 	establishedHeadroom := int64(t.maxEstablishedConns - len(t.conns))
 	extraIncoming := int64(t.numReceivedConns() - t.maxEstablishedConns/2)
-	// We want to allow some experimentation with new peers, and to try to
-	// upset an oversupply of received connections.
+	// Scale floor and cap with maxEstablished so low-tier torrents don't
+	// burn the global half-open budget.
+	floor := int64(max(1, t.maxEstablishedConns/4))
+	halfOpenCap := int64(max(2, t.maxEstablishedConns/2))
 	return int(min(
-		max(5, extraIncoming)+establishedHeadroom,
+		max(floor, extraIncoming)+establishedHeadroom,
 		int64(t.cl.config.HalfOpenConnsPerTorrent),
+		halfOpenCap,
 	))
 }
 
