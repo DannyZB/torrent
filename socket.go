@@ -99,6 +99,11 @@ func listenTcp(network, address string) (s socket, err error) {
 				if err == nil && SocketIPTypeOfService != 0 {
 					err = setSockIPTOS(fd, SocketIPTypeOfService)
 				}
+				if err == nil {
+					// TCP Fast Open: sends data in SYN, saves 1 RTT on connect.
+					// Falls back to normal 3-way handshake if unsupported.
+					setTCPFastOpenConnect(fd)
+				}
 			})
 			if err == nil {
 				err = controlErr

@@ -17,3 +17,7 @@ func setSockNoLinger(fd uintptr) (err error) {
 func setSockIPTOS(fd uintptr, val int) (err error) {
 	return nil
 }
+
+func setTCPFastOpenConnect(fd uintptr) error {
+	return nil
+}

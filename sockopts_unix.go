@@ -31,3 +31,7 @@ func setSockNoLinger(fd uintptr) (err error) {
 func setSockIPTOS(fd uintptr, val int) (err error) {
 	return syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_TOS, val)
 }
+
+func setTCPFastOpenConnect(fd uintptr) error {
+	return syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, unix.TCP_FASTOPEN_CONNECT, 1)
+}
