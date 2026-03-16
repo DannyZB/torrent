@@ -1249,6 +1249,8 @@ func (c *PeerConn) updateRequestsTimerFunc() {
 	}
 	if c.isLowOnRequests() {
 		// If there are no outstanding requests, then a request update should have already run.
+		// Safe to skip timer reset: when this peer gets new requests, onNeedUpdateRequests →
+		// updateRequestsWithReason will reset the timer (requesting.go:305).
 		return
 	}
 	if d := time.Since(c.lastRequestUpdate); d < updateRequestsTimerDuration {
@@ -1278,7 +1280,14 @@ func (c *PeerConn) updateRequestsTimerFunc() {
 	// timer since we already hold the client lock.
 	c.t.maybeOptimisticUnchoke()
 	c.t.updateEndgameMode()
-	c.onNeedUpdateRequests(peerUpdateRequestsTimerReason)
+	// Don't trigger a full request recomputation here — getDesiredRequestState()
+	// is O(pieces × chunks) and causes severe lock contention on the data path.
+	// The 21 event-driven triggers (chunk received, unchoked, have, etc.) already
+	// cover all real request update scenarios. The timer exists only for the
+	// cheap operations above (zombie detection, optimistic unchoke, endgame).
+	if enableUpdateRequestsTimer {
+		c.updateRequestsTimer.Reset(updateRequestsTimerDuration)
+	}
 }
 
 // Maximum pending requests we allow peers to send us. If peer requests are buffered on read, this

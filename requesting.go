@@ -426,8 +426,8 @@ func (p *PeerConn) applyRequestState(next desiredRequestState) {
 	p.peakRequests = newPeakRequests
 }
 
-// This could be set to 10s to match the unchoke/request update interval recommended by some
-// specifications. I've set it shorter to trigger it more often for testing for now.
+// Timer interval for periodic operations (zombie detection, optimistic unchoke,
+// endgame mode). Does NOT trigger request recomputation — that's event-driven.
 const (
 	updateRequestsTimerDuration = 3 * time.Second
 	enableUpdateRequestsTimer   = true

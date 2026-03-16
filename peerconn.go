@@ -1590,7 +1590,7 @@ func (me *PeerConn) peerPtr() *Peer {
 
 // The actual value to use as the maximum outbound requests.
 func (cn *PeerConn) nominalMaxRequests() maxRequests {
-	return max(16, min(cn.PeerMaxRequests, cn.peakRequests*2, maxLocalToRemoteRequests))
+	return max(4, min(cn.PeerMaxRequests, cn.peakRequests*2, maxLocalToRemoteRequests))
 }
 
 // Set the Peer loggers. This is given Client loggers, and later Torrent loggers when the Torrent is
